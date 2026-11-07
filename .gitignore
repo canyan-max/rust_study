@@ -1,0 +1,21 @@
+/target
+/dist
+
+# Temporary files and local logs
+/tmp/
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini

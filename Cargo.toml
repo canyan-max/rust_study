@@ -1,0 +1,13 @@
+[package]
+name = "serial_rust"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+# 仅用于界面截图检查，普通 cargo run 不需要开启。
+screenshot = ["dep:image"]
+
+[dependencies]
+eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow"] }
+serialport = "4.10.1"
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
