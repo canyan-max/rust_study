@@ -1,6 +1,6 @@
 # Rust 复盘笔记：结合 C 基础
 
-更新日期：2026-11-07
+更新日期：2026-11-08
 
 这份笔记用于回顾已讲过的知识，后续随学习补充。学习到哪里、哪里还需巩固，见 [学习进度.md](学习进度.md)。
 
@@ -706,17 +706,63 @@ frame[4..6].copy_from_slice(&count.to_be_bytes());
 
 use 不执行或复制函数，只把名字引入当前作用域；crate 指当前 crate 的根，super 指父模块，不是测试专用语法。学习者当前偏好保留模块前缀，便于定位来源。
 
-### 最新布置：公开请求结构体（尚未反馈完成）
+### 公开请求结构体：从散参数到借用（已完成）
 
 ```rust
 pub struct ReadRequest {
     pub slave_id: u8,
-    pub reg_addr: u16,
-    pub count: u16,
+    pub reg_adr: u16,
+    pub reg_length: u16,
 }
 ```
 
-pub struct 不自动公开字段。练习是在 main 中创建 frame_tools::ReadRequest，再用 request.slave_id 等字段调用原 build_frame；下一步才将函数参数改成 &ReadRequest。
+- `pub struct` 只公开类型本身，字段要各自写 `pub`；漏写字段的 pub，模块外能用类型名，却构造不出值。
+- 定义类型不等于创建值。创建写 `类型 { 字段: 值, ... }`，字段顺序随意，末尾可有逗号，但字段名必须和定义一致。
+- 字段简写 `{ slave_id }` 等价于 `{ slave_id: slave_id }`，前提是外层已有同名同类型的变量；直接写字面值时必须写全。
+
+```rust
+let request = frame_tools::ReadRequest {
+    slave_id: 0x15,
+    reg_adr: 0x0008,
+    reg_length: 14,
+};
+```
+
+与 C 的 `typedef struct { ... } ReadRequest;` 对应：C 同样是"先定义类型，声明变量时才分配内存"。
+
+### 与 C 对照：结构体字面量不套外层花括号
+
+曾写成下面这样，编译不过：
+
+```rust
+let request = { .frame_tools::ReadRequest { slave_id: (), reg_adr: () } };
+```
+
+- 结构体字面量自带花括号，外面再套一层 `{}` 会被当成代码块；代码块里不能以 `.` 开头。
+- 路径前不加点：`frame_tools::ReadRequest`；点号只用于访问字段或调用方法。
+- `()` 是单元类型的值，表示"什么都没有"，不是占位符。字段必须给真实值（或已有变量），留空编译不过。
+- 想"先留空"没有对应语法；需要默认值时才用 `..Default::default()`，且类型必须实现 Default。
+
+### 借用参数：`&ReadRequest`
+
+```rust
+pub fn build_frame(slave_info: &ReadRequest) -> Result<[u8; 8], BuildError> {
+    frame[0] = slave_info.slave_id;
+    frame[2..4].copy_from_slice(&slave_info.reg_adr.to_be_bytes());
+```
+
+调用方和被调函数各有一条规则，容易混：
+
+- 调用方手里是值，所以写 `build_frame(&request)`；调用之后 request 仍可用。
+- 被调函数里的参数本身已经是 `&ReadRequest`，往下传时不能再加 `&`，否则是 `&&ReadRequest`，报 E0308。
+
+| 参数写法 | 参数做了什么 | 调用后原变量 |
+| --- | --- | --- |
+| `slave_info: ReadRequest` | 移动（ReadRequest 未实现 Copy） | 不能再用，用了报 E0382 |
+| `slave_info: &ReadRequest` | 借用 | 仍可用 |
+| `#[derive(Clone, Copy)]` + 传值 | 复制 | 仍可用，但要求所有字段都是 Copy |
+
+判断标准不是"哪种更高级"，而是"调用者之后还要不要用这个值"。ReadRequest 只含 u8/u16，传值也不慢；但一旦字段里加了 String 或 Vec，传值就变成移动，改签名会连累一串调用点，所以先养成用 `&` 的习惯。
 
 ## 21. 单元测试与边界检查
 
@@ -744,7 +790,88 @@ mod tests {
 - assert!(条件) 检查 bool 为 true；Result 的 is_ok()/is_err() 分别检查成功和失败。
 - 错误分支测试匹配到预期的 Err 才算通过；只用 is_err() 不区分具体错误，需精确检查时用 match。
 - 正常值 14、边界值 1/255、非法值 0/256 对应当前教学规则。优先选择有意义的测试，不必穷举所有输入。
-- cargo test 运行测试；见到成功和故意制造的断言失败，能确认测试确实在检查结果。正常组帧测试曾因输入/预期不一致失败；首次 Git 提交前已验证正常帧、零数量和最大数量 255 三项测试全部通过，1、256 的独立用例尚未添加。
+- cargo test 运行测试；见到成功和故意制造的断言失败，能确认测试确实在检查结果。正常组帧测试曾因输入/预期不一致失败；首次 Git 提交前已验证正常帧、零数量和最大数量 255 三项测试全部通过。
+- 之后补充了数量 1（test_mini_count，精确帧断言）与数量 256（test_upper_max_counter，解构 CountTooLarge(count) 后 assert_eq!(count, 256)）两个用例；当前共 7 个用例。
+- 一次失误：写 test_max_count 时把 255 填进了地址字段、数量仍是 14，断言只有 is_ok() 所以照样通过。说明 is_ok() 只能证明"没出错"，不能证明"输入和预期对得上"。
 - 单元测试检查函数逻辑，不能代替串口实机收发、超时、断线等系统验证。
 
 格式化暂采用 rustfmt 默认约 100 字符行宽，无需为本次学习另外设置 80 字符限制。
+
+## 22. CRC16：把 C 的位运算翻译成 Rust
+
+```rust
+pub fn build_crc16(data: &[u8]) -> u16 {
+    let mut crc: u16 = 0xFFFF;
+    for byte in data {
+        crc ^= u16::from(*byte);
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc;
+}
+```
+
+与 `doc/local_communication.md` 里的 C 版本逐行对应，几处不同：
+
+- `for byte in data` 每轮拿到 `&u8`，要写 `*byte` 解引用；C 里 `p_data[index]` 直接就是元素值。
+- `u16::from(*byte)` 是保证无损的转换。`as u16` 也能编译，但 `as` 是"可能截断"的强制转换，`u8 → u16` 用 `from` 更能表达意图。
+- Rust 没有三元运算符。C 的 `cond ? a : b` 写成 `if 条件 { a } else { b }`；`if` 在这里是表达式，可以直接给 `crc` 赋值。
+- `crc & 1 != 0` 的优先级没问题（Rust 里 `&` 高于 `!=`），加括号只是为了好读。
+- `for _ in 0..8` 用 `_` 表示循环变量不用；`0..8` 含 0 不含 8，正好 8 次。
+- `u16` 的 `>>` 是逻辑右移（高位补 0），与 C 对无符号数的行为一致。
+
+### 接入组帧时必须分成两句
+
+```rust
+let crc = build_crc16(&frame[0..6]);
+frame[6..8].copy_from_slice(&crc.to_le_bytes());
+```
+
+写成一行 `frame[6..8].copy_from_slice(&build_crc16(&frame[0..6]).to_le_bytes())` 会报 E0502：同一个表达式里，左边要可变借用 frame，右边又要不可变借用 frame。分成两句后，第一句的不可变借用在语句结束时就释放，第二句才能修改内容。
+
+### 字节序：同一帧里并存两种
+
+- 寄存器地址、寄存器数量：高字节在前，用 `to_be_bytes()`。
+- CRC：低字节在前，用 `to_le_bytes()`。
+- 协议文档帧 `15 03 00 08 00 0E 46 D8` 里，CRC 数值是 `0xD846`，线上两个字节是 `46 D8`。"CRC 是 46 D8"和"CRC 是 0xD846"是同一件事，只是分别从字节和从数值两个角度看。不要把 `46 D8` 当成数值 `0x46D8`。
+
+### 用文档帧做金标准
+
+```rust
+#[test]
+fn test_doc_frame() {
+    let request = super::ReadRequest {
+        slave_id: 0x15,
+        reg_adr: 0x0008,
+        reg_length: 0x0E,
+    };
+    let result = build_frame(&request);
+    match result {
+        Ok(frame) => assert_eq!(frame, [0x15, 0x03, 0x00, 0x08, 0x00, 0x0E, 0x46, 0xD8]),
+        Err(_) => panic!("文档示例帧应该组帧成功"),
+    }
+}
+```
+
+期望值取自协议文档，而不是从代码里抄出来，因此它能独立判断"组帧与 CRC 是否和固件一致"。该用例已跑通。
+
+## 23. 测试变红的两种含义
+
+| 红的含义 | 判别办法 |
+| --- | --- |
+| 代码写错了 | 没有可信的外部标准，只能逐行检查 |
+| 预期值过时了 | 存在一个期望值取自外部标准（协议文档、设备实录）的锚点测试，且这个锚点是绿的 |
+
+两次实测：
+
+- `is_ok()` 造成的假绿：写 `test_max_count` 时把 255 填进了地址字段、数量仍是 14。断言只有 `assert!(result.is_ok())`，所以照样通过——问题出在测试本身，不是被测代码。
+- 预期过时：帧尾接入真 CRC 后，`test_build_frame`、`test_mini_count` 变红，`left` 是新帧、`right` 是旧的 `00 00`。此时锚点 `test_doc_frame` 是绿的，所以可以放心按 `left` 更新 `right`。
+
+`assert_eq!` 失败时打印 `left`（实际）与 `right`（预期），并且是**十进制**：`[21, 3, 0, 8, 0, 1, 6, 220]` 就是 `15 03 00 08 00 01 06 DC`。代码里仍写十六进制，便于和协议文档对照。
+
+改测试预期前先问一句：**这个新值是从哪来的？** 如果只能从失败信息里抄，那只是让测试闭嘴；如果能从协议文档或外部标准推出来，才算真的验证。

@@ -4,7 +4,7 @@ Rust 学习代码和复盘文档，结合 C、AT32 MCU 和串口协议实践。
 
 ## 当前学习入口
 
-当前 `src/main.rs` 运行命令行组帧练习，通过 `src/frame_tools.rs` 学习模块、Result、错误枚举和单元测试。
+当前 `src/main.rs` 运行命令行组帧练习，通过 `src/frame_tools.rs` 学习模块、结构体、借用、Result、错误枚举、CRC16 和单元测试。
 
 ```powershell
 cargo run
@@ -15,7 +15,7 @@ cargo test
 - [学习进度](doc/学习进度.md)
 - [复盘笔记](doc/Rust复盘笔记.md)
 
-`src/main.rs` 中还保留了注释形式的早期练习和 GUI 入口。下方是此前已验证的图形监视器说明；当前入口不会启动 GUI，相关命令参数需恢复 GUI 入口后使用。当前练习帧尾仍为占位字节。
+`src/main.rs` 中还保留了注释形式的早期练习和 GUI 入口。下方是此前已验证的图形监视器说明；当前入口不会启动 GUI，相关命令参数需恢复 GUI 入口后使用。当前练习已接入 CRC16，帧尾不再是占位字节。
 
 ## MPPT 串口监视器（此前实践）
 

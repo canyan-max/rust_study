@@ -516,10 +516,12 @@
 
 mod frame_tools;
 fn main() {
-    let regster_adr: u16 = 0x1234;
-    let regster_count: u16 = 0x01;
-    let slave_id: u8 = 0x15;
-    match frame_tools::build_and_show(slave_id, regster_adr, regster_count) {
+    let request: frame_tools::ReadRequest = frame_tools::ReadRequest {
+        slave_id: 0x15,
+        reg_adr: 0x1234,
+        reg_length: 0x01,
+    };
+    match frame_tools::build_and_show(&request) {
         Ok(()) => {
             println!("操作完成");
         }
