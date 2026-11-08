@@ -514,22 +514,33 @@
 //     }
 // }
 
-mod frame_tools;
+// mod frame_tools;
+// fn main() {
+//     let request: frame_tools::ReadRequest = frame_tools::ReadRequest {
+//         slave_id: 0x15,
+//         reg_adr: 0x1234,
+//         reg_length: 0x01,
+//     };
+//     match frame_tools::build_and_show(&request) {
+//         Ok(()) => {
+//             println!("操作完成");
+//         }
+//         Err(frame_tools::BuildError::ZeroErr) => {
+//             println!("数量不能为 0");
+//         }
+//         Err(frame_tools::BuildError::CountTooLarge(count)) => {
+//             println!("数量过大：{}", count);
+//         }
+//     }
+// }
+// use std::fmt::Display;
+
+pub fn show_value<T: std::fmt::Display>(value: T) {
+    println!("show value T={}", value);
+}
 fn main() {
-    let request: frame_tools::ReadRequest = frame_tools::ReadRequest {
-        slave_id: 0x15,
-        reg_adr: 0x1234,
-        reg_length: 0x01,
-    };
-    match frame_tools::build_and_show(&request) {
-        Ok(()) => {
-            println!("操作完成");
-        }
-        Err(frame_tools::BuildError::ZeroErr) => {
-            println!("数量不能为 0");
-        }
-        Err(frame_tools::BuildError::CountTooLarge(count)) => {
-            println!("数量过大：{}", count);
-        }
-    }
+    let data1: u8 = 20;
+    let data2: String = String::from("is string");
+    show_value(data1);
+    show_value(data2);
 }

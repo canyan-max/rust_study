@@ -72,7 +72,6 @@ pub fn build_crc16(data: &[u8]) -> u16 {
 mod tests {
     use super::build_frame;
     use crate::frame_tools::build_crc16;
-    // use crate::frame_tools::tests;
     #[test]
     fn test_build_frame() {
         let request = super::ReadRequest {
