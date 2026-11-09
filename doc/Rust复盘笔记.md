@@ -1,6 +1,6 @@
 # Rust 复盘笔记：结合 C 基础
 
-更新日期：2026-11-08
+更新日期：2026-11-09
 
 这份笔记用于回顾已讲过的知识，后续随学习补充。学习到哪里、哪里还需巩固，见 [学习进度.md](学习进度.md)。
 
@@ -875,3 +875,289 @@ fn test_doc_frame() {
 `assert_eq!` 失败时打印 `left`（实际）与 `right`（预期），并且是**十进制**：`[21, 3, 0, 8, 0, 1, 6, 220]` 就是 `15 03 00 08 00 01 06 DC`。代码里仍写十六进制，便于和协议文档对照。
 
 改测试预期前先问一句：**这个新值是从哪来的？** 如果只能从失败信息里抄，那只是让测试闭嘴；如果能从协议文档或外部标准推出来，才算真的验证。
+
+## 24. 泛型、所有权和 trait 约束
+
+```rust
+fn show_value<T: std::fmt::Display>(value: &T) {
+    println!("{}", value);
+}
+```
+
+- T 是类型参数，不是运行时随意改变类型的变量；同一泛型名称在同一次实例化中指相同类型。
+- 泛型结构体可以有多个类型参数，例如 Pair<T, U>；Pair<T> 的两个 T 字段必须是同类型。
+- 泛型不会取消所有权规则：参数为 T 时，传 String 会移动；传 u8 则复制，因为 u8 实现 Copy。参数为 &T 时借用；data.clone() 则创建独立副本再移入函数。
+- String 移入函数后，本例中会随参数离开作用域而销毁，不会自动把所有权还给调用方。与 let b = a 的移动是同一条规则。
+- T: Display 声明类型必须支持 {} 打印；T: PartialOrd 声明类型支持相应大小比较操作。约束在编译时检查，不是传入或临时添加一种功能。
+- PartialOrd 允许存在无法比较的情况，例如浮点 NaN；当前只用普通数值练习，不把它当作任意类型的全序保证。
+
+## 25. 自定义 trait、默认实现和 dyn
+
+```rust
+trait Describe {
+    fn name(&self) -> &str;
+
+    fn describe(&self) {
+        println!("设备名称：{}", self.name());
+    }
+}
+
+struct Sensor {
+    value: u16,
+}
+
+impl Describe for Sensor {
+    fn name(&self) -> &str {
+        return "Sensor";
+    }
+
+    fn describe(&self) {
+        println!("sensor data：{}", self.value);
+    }
+}
+```
+
+- trait 规定公共能力接口，impl Describe for Sensor 为具体类型实现接口；这里的 for 不是循环。
+- 只有声明的方法需要由实现方提供；有默认函数体的方法可以沿用或重写。
+- 类型重写 describe 后，不会先自动执行 trait 的默认 describe。希望打印名字时，需在自己的方法中明确调用 self.name()。
+- 默认方法可以调用 trait 中要求实现的其他方法；公共流程与各类型差异可以这样组合。
+- 已完成 Sensor、PortConfig、Dev 通过统一入口调用、默认行为和自定义行为的练习。
+
+```rust
+fn show<T: Describe>(data: &T) {
+    data.describe();
+}
+
+fn show_dynamic(data: &dyn Describe) {
+    data.describe();
+}
+```
+
+前者根据具体类型静态分发；后者通过 trait 对象动态分发。当前 Describe 可用于 dyn；不是任意 trait 都能用于 dyn，兼容性规则留待以后。
+
+```rust
+let sensor = Sensor { value: 123 };
+let device: &dyn Describe = &sensor;
+show_dynamic(device);
+```
+
+- &dyn Describe 仍是固定类型的引用；不同具体类型必须实现 Describe，才能转换为相应 trait 对象引用。
+- 同一个 &dyn Describe 变量可以改为引用另一个兼容对象，但不会改变原对象的类型。
+- 可以创建 [&dyn Describe; 3] 保存不同类型对象的引用，统一遍历 describe；已练习。
+- 与 C 结构体函数指针用途相似：统一接口、隔离实现；泛型方式不等于在对象里保存函数指针。
+- 不必为每个设备定义一个 trait 或一个上层函数，按共同能力组织即可。
+
+## 26. 状态枚举与错误枚举的类型设计
+
+```rust
+enum SensorState { Ready, Busy, HardErr }
+enum SensorError { Busy, HardwareFault }
+
+trait SensorRead {
+    fn read(&mut self) -> Result<u16, SensorError>;
+}
+```
+
+- 状态用于保存设备当前情况，错误类型用于表达某次操作失败的原因，两者职责不同。
+- 若使用 Result<u16, SensorState>，Err(Ready) 也是类型允许的值，即使函数没有返回它，match 也要覆盖。
+- Rust 没有强制必须拆两个枚举；拆开后可以在类型层面排除不合理的 Err(Ready)。
+- 自定义枚举使用 == 可添加 #[derive(PartialEq)]；用 match 判断这些无数据变体时，无需该约束。
+- 构造结构体写 state: SensorState::Ready，冒号前是字段名，不是类型名；随后可用 sensor.state = SensorState::Busy 修改。
+- 本段仅为练 trait、Result 与枚举的配合，用户要求暂停向设备更新流程、后台采集架构等话题展开。
+
+## 27. 多个约束、where 和符号对照
+
+```rust
+fn is_greater<T>(a: T, b: T) -> bool
+where
+    T: PartialOrd + std::fmt::Display,
+{
+    println!("正在比较：{} 和 {}", a, b);
+    return a > b;
+}
+```
+
+- 等价于 fn is_greater<T: PartialOrd + std::fmt::Display>(...)。
+- + 表示两种能力都要满足。函数使用 >，需要比较能力；使用 {} 打印参数，需要 Display。只打印固定文字不需要 Display。
+- 用户已运行并确认简单比较加打印的例子；长约束偏好 where。
+- 先前最大值切片示例把 Copy、Option 等一起引入，跨度偏大；后续每次只加一个概念。
+
+```rust
+fn show_pair<T, U>(a: &T, b: &U)
+where
+    T: std::fmt::Display,
+    U: std::fmt::Debug,
+{
+    println!("a={}", a);
+    println!("b={:?}", b);
+}
+```
+
+| 符号 | 当前位置的含义 | 示例 |
+| --- | --- | --- |
+| <T, U> | 声明类型参数 | fn show_pair<T, U> |
+| (a: &T) | 声明数据参数及类型 | a 借用一个 T |
+| : | 变量的类型标注或泛型约束 | a: &T、T: Display |
+| :: | 路径分隔 | std::fmt::Debug |
+| + | 同时满足多个 trait 约束 | PartialOrd + Display |
+| , | 分隔类型参数、数据参数或 where 条件 | T: Display, U: Debug, |
+
+已遇到两次拼写问题：where 后漏写 T:；std:fmt::Debug 中少一个冒号。换行与否不影响这些语法，但每行一条 where 约束更清楚。
+
+泛型结构体方法的后续练习与讨论见第 28–30 节。保持只讲 Rust 概念，不扩展设备架构。
+
+## 28. 泛型结构体的方法和方法约束
+
+```rust
+struct Holder<T> {
+    value: T,
+}
+
+impl<T> Holder<T> {
+    fn get(&self) -> &T {
+        return &self.value;
+    }
+
+    fn set(&mut self, value: T) {
+        self.value = value;
+    }
+
+    fn show(&self)
+    where
+        T: std::fmt::Display,
+    {
+        println!("当前值：{}", self.value);
+    }
+}
+```
+
+- impl<T> 声明本实现中的类型参数；Holder<T> 指被实现方法的类型。它不是 impl Trait for Type，不涉及为类型实现某个 trait。
+- Holder<u16> 和 Holder<String> 复用方法逻辑，但各个实例的类型一旦确定，set 就不能把字段换成另一种类型。
+- get 只返回借用，不需要 Display；set 接收并替换 T，不需要 Copy；show 在方法自身声明 Display 约束即可。
+- 已见到不同类型值的输出，字符串外的引号通常来自 Debug 的 {:?}，Display 的 {} 不额外加引号。
+
+### 泛型字段与固定类型字段可以共存
+
+```rust
+struct Holder<T> {
+    value: T,
+    value2: u16,
+}
+```
+
+这个定义仍然适用。泛型只作用于写了 T 的字段，value2 始终是 u16。get 返回 &self.value，所以只得到 &T，不会自动返回整个 Holder。要读取 value2，可以写独立方法返回 u16；增加字段后，所有构造代码也必须初始化它。
+
+### 泛型结构体什么时候有意义
+
+Holder 本身主要是语法与所有权的教学例子，不是要求普通业务数据都加一层包装。实际价值在于管理逻辑一致、元素类型不同的容器，例如 Vec<T>、FIFO<T>、消息队列。明确固定的业务字段直接写具体类型即可，不为泛型而泛型。
+
+## 29. Self、self、new 与字段简写
+
+```rust
+impl<T> Holder<T> {
+    fn new(value: T) -> Self {
+        return Self { value };
+    }
+}
+
+let data: Holder<String> = Holder::new(String::from("AACV"));
+```
+
+- 在这个 impl 中，Self 是当前类型 Holder<T>；self 是接收当前具体对象的参数。大小写固定，不能互换。
+- -> Self 表示返回当前类型；Self { value } 构造一个当前类型的对象。
+- new 没有 self 参数，是关联函数，通过 Holder::new(...) 调用；它是惯例名称，不是必须使用的特殊构造函数关键字。
+- Self { value: value } 中左边是字段名，右边是变量名；同名时可简写为 Self { value }。若参数叫 input，则写 Self { value: input }。
+- 写类型时用 Self，读取当前对象的字段用 self.value。
+
+## 30. 三种接收者、返回类型与所有权
+
+```rust
+impl<T> Holder<T> {
+    fn get(&self) -> &T {
+        return &self.value;
+    }
+
+    fn get_mut(&mut self) -> &mut T {
+        return &mut self.value;
+    }
+
+    fn into_inner(self) -> T {
+        return self.value;
+    }
+}
+```
+
+| 方法 | 接收方式 | 返回的是什么 | 对 Holder<String> 的影响 |
+| --- | --- | --- | --- |
+| get | &self | 字段的共享引用 &T | 借来读取，原对象保留 |
+| get_mut | &mut self | 字段的可变引用 &mut T | 借来修改原值，原对象保留 |
+| into_inner | self | 拥有的字段值 T | 移入方法，字段交给调用方，原变量不能再用 |
+
+### 调用方变量类型也要匹配
+
+```rust
+let data: Holder<String> = Holder::new(String::from("AACV"));
+let text: &String = data.get();
+println!("{}", text);
+```
+
+T 为 String 时，&T 就是 &String，不是 String。因此不能写 let text: String = data.get()；需要独立副本时才 clone。
+
+```rust
+let data: Holder<String> = Holder::new(String::from("AACV"));
+let text: String = data.into_inner();
+// data 此后不能再使用，text 拥有取出的字符串。
+```
+
+方法名不决定移动还是借用，签名才决定。若把 into_inner 改成 (&self) -> &T，行为就变成借用，虽然名字不再符合惯例。采用 get 表达只读借用更清楚。
+
+### 为什么不能从被消耗的对象中返回字段引用
+
+```rust
+// 错误示例：不能这样返回。
+// fn into_inner(self) -> &T {
+//     return &self.value;
+// }
+```
+
+这个 Holder 由方法拥有，在结束时销毁；不能把指向它内部字段的引用返回给外面。改为借用对象再返回 &T，或消耗对象并返回 T。这里针对当前拥有 T 字段的 Holder，不泛化到所有带引用字段的类型。
+
+### get_mut 明确授予修改原值的权限
+
+```rust
+let mut data: Holder<String> = Holder::new(String::from("AACV"));
+let text: &mut String = data.get_mut();
+text.push_str("_Rust");
+println!("{}", data.get());
+```
+
+没有复制字符串，修改的是原字段。允许修改来自可变对象和 &mut 引用，借用结束后可以重新访问 data。Rust 检查内存与借用安全，不会自动保证修改符合业务规则；不想开放直接修改，就不提供 get_mut，或采用带检查的修改方法。
+
+所有权判断顺序：先看接收者是 &self、&mut self 还是 self，判断借用或按值接收；再看返回值是 &T、&mut T 还是 T。对于 Copy 类型按值接收可复制，不能将所有 self 参数一概当作使原变量失效。
+
+## 31. 闭包入门（本轮先到这里）
+
+已手写并观察闭包捕获外部 offset；也运行过计数闭包，输出当前计数 1、2，最终计数 2。
+
+- `|参数| { 函数体 }` 定义闭包，无参数写 `||`；保存到变量后可以调用，也可作为函数参数传入。
+- 普通函数不能直接捕获调用处的局部变量；闭包可以按使用方式借用或取得外部值的所有权。
+- 只读 offset 的示例使用共享借用；修改 count 的示例使用可变借用，仍受借用规则限制。
+- 已讨论 retain 接受判断闭包的用途，未收到这项手写验证反馈。
+- 学习者决定暂时掌握写法、调用与捕获即可；move、Fn/FnMut/FnOnce 留待需要时展开。
+
+## 32. minigrep：文件、字符串与返回容器
+
+已在现有工程添加 minigrep 模块，从 main 调用 minigrep::minigrep_run()。完整练习说明与计划见 [minigrep练习与接续计划.md](minigrep练习与接续计划.md)。
+
+- `env::args().collect()` 收集参数到 `Vec<String>`；第 0 项是程序自身，第 1、2 项为关键词和文件路径。先检查数量再按下标取值。
+- `fs::read_to_string` 返回 `Result<String, std::io::Error>`，用 match 区分文件内容和错误。
+- `contents.lines()` 逐行得到 `&str`，`line.contains(query)` 判断包含，区分大小写。
+- `search(query: &str, contents: &str) -> Vec<String>` 借用输入；匹配的行用 to_string 复制为 String，再 push 到结果。
+- `Vec<String>` 不能用 `{}` 整体打印；调试用 `{:?}`，正常显示用 for 借用容器并逐行打印。
+- `return result;` 把 Vec 所有权交给调用方 ret；局部变量作用域结束，但返回的数据由新所有者管理。
+- 无匹配就返回空容器，不必把无匹配当成读文件失败。
+- `assert_eq!` 比较 Vec 的长度、顺序与每个元素，预期应为匹配的完整行组成的 Vec<String>，不能只与关键词字符串比较。
+- `assert!(ret.is_empty())` 检查空结果。课堂两项测试曾通过；当前保存的无匹配用例正文与关键词均包含 TTFE，需先检查数据，本次未重跑测试。
+- 下一步自己写忽略大小写版本：to_lowercase 返回新 String，用转换后的文本判断，加入结果时保留原始行；尚未完成验证。
+
+教学约定：先提供库函数、参数、返回类型和验收条件，处理逻辑由学习者手写；明确问怎么写时，再给卡点示例。

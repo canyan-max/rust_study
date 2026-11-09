@@ -1,0 +1,4 @@
+AT32 is running.
+UART is ready.
+Hello Rust.
+AT32 sends data.

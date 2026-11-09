@@ -535,12 +535,226 @@
 // }
 // use std::fmt::Display;
 
-pub fn show_value<T: std::fmt::Display>(value: T) {
-    println!("show value T={}", value);
-}
+// pub fn show_value<T: std::fmt::Display>(value: &T) {
+//     println!("show value T={}", value);
+// }
+// fn main() {
+//     let data1: u8 = 20;
+//     let data2: String = String::from("is string");
+//     show_value(&data1);
+//     show_value(&data2);
+//     println!("原字符串：{}", data1);
+//     println!("原字符串：{}", data2);
+// }'
+// trait Describe {
+//     fn name(&self) -> &str;
+//     fn describe(&self) {
+//         println!("设备名称：{}", self.name());
+//     }
+// }
+// struct Dev {}
+// struct PortConfig {
+//     baud_rate: u32,
+// }
+// struct Sensor {
+//     value: u16,
+// }
+// impl Describe for PortConfig {
+//     fn name(&self) -> &str {
+//         return "PortConfig";
+//     }
+//     fn describe(&self) {
+//         println!("device name：{}", self.name());
+//         println!("串口波特率：{}", self.baud_rate);
+//     }
+// }
+// impl Describe for Dev {
+//     fn name(&self) -> &str {
+//         return "Dev";
+//     }
+//     fn describe(&self) {
+//         println!("device name：{}", self.name());
+//     }
+// }
+//
+// impl Describe for Sensor {
+//     fn name(&self) -> &str {
+//         return "Sensor";
+//     }
+//     fn describe(&self) {
+//         println!("device name：{}", self.name());
+//         println!("sensor data：{}", self.value);
+//     }
+// }
+//
+// fn show<T: Describe>(data: &T) {
+//     data.describe();
+// }
+//
+// fn show_dynamic(data: &dyn Describe) {
+//     data.describe();
+// }
+// fn main() {
+//     // let sensor = Sensor { value: 123 };
+//     // let port = PortConfig { baud_rate: 9600 };
+//     // let dev = Dev {};
+//
+//     // show(&dev);
+//     let sensor = Sensor { value: 123 };
+//     let port = PortConfig { baud_rate: 9600 };
+//     let dev = Dev {};
+//     let devices: [&dyn Describe; 3] = [&sensor, &port, &dev];
+//     for device in devices {
+//         device.describe();
+//     }
+// }
+
+// use eframe::egui::SetOpenCommand::Bool;
+
+// use std::fmt;
+
+// enum SensorState {
+//     Ready,
+//     Busy,
+//     HardErr,
+// }
+//
+// enum SensorError {
+//     Busy,
+//     HardwareFault,
+// }
+//
+// struct TestSensor {
+//     value: u16,
+//     state: SensorState,
+// }
+//
+// trait SensorRead {
+//     fn read(&mut self) -> Result<u16, SensorError>;
+// }
+//
+// impl SensorRead for TestSensor {
+//     fn read(&mut self) -> Result<u16, SensorError> {
+//         match self.state {
+//             SensorState::Ready => {
+//                 return Ok(self.value);
+//             }
+//             SensorState::Busy => {
+//                 return Err(SensorError::Busy);
+//             }
+//             SensorState::HardErr => {
+//                 return Err(SensorError::HardwareFault);
+//             }
+//         }
+//     }
+// }
+//
+// fn collect(sensor: &mut dyn SensorRead) {
+//     match sensor.read() {
+//         Ok(value) => {
+//             println!("读取成功：{}", value);
+//         }
+//         Err(SensorError::Busy) => {
+//             println!("设备忙，稍后再读");
+//         }
+//         Err(SensorError::HardwareFault) => {
+//             println!("硬件故障，读取失败");
+//         }
+//     }
+// }
+
+// fn is_greater<T: PartialOrd + std::fmt::Debug>(a: T, b: T) -> bool {
+//     println!("start compara");
+//     return a > b;
+// }
+
+// fn is_greater<T>(a: T, b: T) -> bool
+// where
+//     T: PartialOrd + std::fmt::Display,
+// {
+//     println!("start compara");
+//     return a > b;
+// }
+// fn show_pair<T, U>(a: T, b: U)
+// where
+//     T: std::fmt::Display,
+//     U: std::fmt::Debug,
+// {
+//     println!("a{}", a);
+//     println!("b{:?}", b);
+// }
+// fn main() {
+//     let mut sensor = TestSensor {
+//         value: 123,
+//         state: SensorState::Ready,
+//     };
+//
+//     collect(&mut sensor);
+//
+//     sensor.state = SensorState::Busy;
+//     collect(&mut sensor);
+//
+//     sensor.state = SensorState::HardErr;
+//     collect(&mut sensor);
+//     let greater: bool = is_greater(20, 10);
+//     println!("true or flase={}", greater);
+//     show_pair(20, String::from("AB"));
+// }
+//
+//
+//
+// struct Holder<T> {
+//     value: T,
+// }
+// impl<T> Holder<T> {
+//     fn new(value: T) -> Self {
+//         return Self { value };
+//     }
+//     fn get(&self) -> &T {
+//         return &self.value;
+//     }
+//     fn set(&mut self, value: T) {
+//         self.value = value;
+//     }
+//     fn into_inner(self) -> T {
+//         return self.value;
+//     }
+//     fn get_mut(&mut self) -> &mut T {
+//         return &mut self.value;
+//     }
+//     fn show(&self)
+//     where
+//         T: std::fmt::Debug,
+//     {
+//         println!("{:?}", self.value);
+//     }
+// }
+// fn main() {
+//     let mut data: Holder<String> = Holder::new(String::from("AACV"));
+//     let text: &mut String = data.get_mut();
+//     text.push_str("_Rust");
+//     println!("修改后：{}", data.get());
+// }
+
+// fn main() {
+// let offset: u16 = 20;
+// let add_offset = |adder_value: u16| -> u16 {
+//     return adder_value + offset;
+// };
+// let result: u16 = add_offset(5);
+// println!("add_offset={}", result);
+//
+//     let mut count: u16 = 0;
+//
+//     let mut add_one = || {
+//         count += 1;
+//         println!("当前计数：{}", count);
+//     };
+//     add_one();
+//     add_one();
+//     println!("最终计数：{}", count);
+// }
+mod minigrep;
 fn main() {
-    let data1: u8 = 20;
-    let data2: String = String::from("is string");
-    show_value(data1);
-    show_value(data2);
+    minigrep::minigrep_run();
 }
