@@ -3,7 +3,6 @@ use std::fs;
 struct Config {
     query: String,
     file_path: String,
-    is_sensitive: bool,
 }
 
 fn search(query: &str, contents: &str) -> Vec<String> {
@@ -15,7 +14,7 @@ fn search(query: &str, contents: &str) -> Vec<String> {
             continue;
         }
     }
-    return result;
+    result
 }
 
 fn search_case_insensitive(query: &str, contents: &str) -> Vec<String> {
@@ -28,30 +27,39 @@ fn search_case_insensitive(query: &str, contents: &str) -> Vec<String> {
             result.push(line.to_string());
         }
     }
-    return result;
+    result
 }
 
 fn parse_args(args: &[String]) -> Result<Config, String> {
-    if args.len() < 3 || args.len() > 4 {
+    if args.len() != 3 {
         return Err("input paramter err".to_string());
     }
-    let mut minigrep_paramter: Config = Config {
+    let minigrep_paramter: Config = Config {
         query: args[1].clone(),
         file_path: args[2].clone(),
-        is_sensitive: false,
     };
-    if let Some(option) = args.get(3) {
-        if option == "--case-sensitive" {
-            minigrep_paramter.is_sensitive = true;
-        } else {
-            return Err("input arg index 3 err".to_string());
-        }
-    }
-    return Ok(minigrep_paramter);
+    Ok(minigrep_paramter)
 }
 
-pub fn minigrep_run() {
+fn search_file(config: &Config) -> Result<(), std::io::Error> {
+    let contents = fs::read_to_string(&config.file_path)?;
+    let case_sensitive = env::var("CASE_SENSITIVE").is_ok();
+    let ret = if case_sensitive {
+        search(&config.query, &contents)
+    } else {
+        search_case_insensitive(&config.query, &contents)
+    };
+
+    for line in &ret {
+        println!("{}", line);
+    }
+
+    Ok(())
+}
+
+pub fn minigrep_start() {
     let args: Vec<String> = env::args().collect();
+
     let minigrep_paramter: Config = match parse_args(&args) {
         Ok(config) => config,
         Err(error) => {
@@ -59,24 +67,10 @@ pub fn minigrep_run() {
             std::process::exit(1);
         }
     };
-    let result: Result<String, std::io::Error> = fs::read_to_string(&minigrep_paramter.file_path);
-    match result {
-        Ok(contents) => {
-            // read info of keyword and printf
-            let ret: Vec<String>;
-            if false == minigrep_paramter.is_sensitive {
-                ret = search_case_insensitive(&minigrep_paramter.query, &contents);
-            } else {
-                ret = search(&minigrep_paramter.query, &contents);
-            }
-            for line in &ret {
-                println!("{}", line);
-            }
-        }
-        Err(error) => {
-            eprintln!("读取文件失败：{}", error);
-            std::process::exit(1);
-        }
+
+    if let Err(error) = search_file(&minigrep_paramter) {
+        eprintln!("read file error：{}", error);
+        std::process::exit(1);
     }
 }
 
@@ -131,19 +125,6 @@ mod tests {
         };
         assert_eq!(minigrep_paramter.query, "AT32");
         assert_eq!(minigrep_paramter.file_path, "sample.txt");
-        assert!(!minigrep_paramter.is_sensitive);
-    }
-    #[test]
-    fn test_parse_args_illger() {
-        use super::Config;
-        let args: Vec<String> = vec![
-            "serial_rust.exe".to_string(),
-            "AT32".to_string(),
-            "sample.txt".to_string(),
-            "--abc.txt".to_string(),
-        ];
-        let result: Result<Config, String> = parse_args(&args);
-        assert!(result.is_err());
     }
     #[test]
     fn test_parse_args_too_few() {
@@ -151,22 +132,5 @@ mod tests {
         let args: Vec<String> = vec!["serial_rust.exe".to_string(), "AT32".to_string()];
         let result: Result<Config, String> = parse_args(&args);
         assert!(result.is_err());
-    }
-    #[test]
-    fn test_parse_args_is_ok() {
-        use super::Config;
-        let args: Vec<String> = vec![
-            "serial_rust.exe".to_string(),
-            "AT32".to_string(),
-            "sample.txt".to_string(),
-            "--case-sensitive".to_string(),
-        ];
-        let minigrep_paramter: Config = match parse_args(&args) {
-            Ok(config) => config,
-            Err(error) => {
-                panic!("合法参数解析失败：{}", error);
-            }
-        };
-        assert!(minigrep_paramter.is_sensitive);
     }
 }

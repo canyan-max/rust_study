@@ -1,0 +1,7 @@
+[
+  {
+    "label": "clippy",
+    "command": "cargo",
+    "args": ["clippy", "--all-targets"]
+  }
+]

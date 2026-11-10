@@ -756,5 +756,5 @@
 // }
 mod minigrep;
 fn main() {
-    minigrep::minigrep_run();
+    minigrep::minigrep_start();
 }
