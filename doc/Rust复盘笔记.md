@@ -1,6 +1,6 @@
 # Rust 复盘笔记：结合 C 基础
 
-更新日期：2026-11-09
+更新日期：2026-11-11
 
 这份笔记用于回顾已讲过的知识，后续随学习补充。学习到哪里、哪里还需巩固，见 [学习进度.md](学习进度.md)。
 
@@ -345,15 +345,13 @@ fn main()
 - `=>` 右边是该分支要执行的表达式，各分支用逗号分隔；这里的两个分支覆盖了所有可能。
 - `data[0]` 直接索引在空切片上会触发 panic，不能当作 C 中返回错误码或读取到默认值来理解。
 
-## 12. 串口实践前的路线
+## 12. 串口基础操作与依赖排错
 
 目标：先在 Windows 上通过 USB 串口与设备通信，现有 MCU 程序仍使用 C。
 
-- 先添加 serialport 依赖并枚举串口，再逐步打开端口、发送和接收字节。
 - 串口操作可能失败，需要学习 Result：Ok(成功结果)、Err(错误)，用 match 分别处理。与 Option 的“有或无”区别开。
 - 读取数据时传入可变缓冲区，成功后只处理实际读取长度 n 对应的 &buf[..n]。
 - 一次 read 不保证恰好读到一整帧，协议组帧留到基础收发打通后再做。
-- use、std::io::Read / Write、Duration 和 Vec 等语法或类型，在实际用到时逐项解释，先不展开泛型、trait、异步等完整理论。
 - 实机收发前需确认端口号、波特率、数据位、校验位、停止位，以及对端是 MCU、另一只串口还是回环连接。
 
 ### 已遇到的依赖下载问题：证书吊销检查服务器不可达
@@ -369,7 +367,7 @@ cargo --config 'http.check-revoke=false' check
 
 这只对对应命令关闭证书吊销检查，仍保留 HTTPS 证书校验；未写入项目或全局 Cargo 配置。遇到同类错误时可临时使用，不作为日常默认设置。
 
-本次已加入 serialport = "4.10.1"，并通过 cargo check。后续编写串口枚举示例。
+项目已加入 serialport 依赖；下面是枚举和打开串口的练习示例。
 
 ### 第一个串口实验：枚举串口
 
@@ -1147,17 +1145,122 @@ println!("{}", data.get());
 
 ## 32. minigrep：文件、字符串与返回容器
 
-已在现有工程添加 minigrep 模块，从 main 调用 minigrep::minigrep_run()。完整练习说明与计划见 [minigrep练习与接续计划.md](minigrep练习与接续计划.md)。
+更新至 2026-11-11。当前模块入口为 minigrep_start()，项目结构、运行方法和当前测试见 [学习进度.md](学习进度.md)。
 
-- `env::args().collect()` 收集参数到 `Vec<String>`；第 0 项是程序自身，第 1、2 项为关键词和文件路径。先检查数量再按下标取值。
-- `fs::read_to_string` 返回 `Result<String, std::io::Error>`，用 match 区分文件内容和错误。
-- `contents.lines()` 逐行得到 `&str`，`line.contains(query)` 判断包含，区分大小写。
-- `search(query: &str, contents: &str) -> Vec<String>` 借用输入；匹配的行用 to_string 复制为 String，再 push 到结果。
-- `Vec<String>` 不能用 `{}` 整体打印；调试用 `{:?}`，正常显示用 for 借用容器并逐行打印。
-- `return result;` 把 Vec 所有权交给调用方 ret；局部变量作用域结束，但返回的数据由新所有者管理。
-- 无匹配就返回空容器，不必把无匹配当成读文件失败。
-- `assert_eq!` 比较 Vec 的长度、顺序与每个元素，预期应为匹配的完整行组成的 Vec<String>，不能只与关键词字符串比较。
-- `assert!(ret.is_empty())` 检查空结果。课堂两项测试曾通过；当前保存的无匹配用例正文与关键词均包含 TTFE，需先检查数据，本次未重跑测试。
-- 下一步自己写忽略大小写版本：to_lowercase 返回新 String，用转换后的文本判断，加入结果时保留原始行；尚未完成验证。
+- env::args().collect() 获取 Vec<String>；下标 0 是程序自身，1、2 是关键词与路径。
+- Config 拥有 query 和 file_path 两个 String；parse_args 接收 &[String]，通过 clone 创建配置，返回 Result<Config, String>。
+- fs::read_to_string 返回 Result<String, std::io::Error>；lines() 逐行借用为 &str，contains 返回 bool。
+- to_lowercase 创建小写副本用于比较，返回结果仍保留原始文本。
+- 第一版 search 返回 Vec<String>，每行用 to_string 复制。return result 把容器所有权交给调用者，局部变量作用域结束不释放已经移出的数据。
+- 当前版返回 Vec<&str>，只保存原文引用；不复制匹配行，仍会为 Vec 容器分配存储；忽略大小写比较也仍会创建小写 String。
+- Vec 通常不能用 {} 直接打印；调试可用 {:?}，正常结果逐行打印。
+- 无匹配返回空容器；这不等于文件读取失败。
+- 当前 CASE_SENSITIVE 环境变量能读到时启用区分大小写；值是 0 也同样启用。早期第四参数 --case-sensitive 方案已取消。
+- 2026-11-11 运行当前七项测试全部通过，早期无匹配测试正文和关键词重合的问题已修复。
 
-教学约定：先提供库函数、参数、返回类型和验收条件，处理逻辑由学习者手写；明确问怎么写时，再给卡点示例。
+## 33. Result、match 表达式与分支类型
+
+Result<Config, String> 只表示一个结果值：成功为 Ok(Config)，失败为 Err(String)，不是同时返回两个参数。
+
+```rust
+let config: Config = match parse_args(&args) {
+    Ok(config) => config,
+    Err(error) => {
+        eprintln!("{}", error);
+        return;
+    }
+};
+```
+
+- 左边需要 Config；成功分支取出 Config，作为整个 match 的结果。
+- 失败分支 return 退出当前函数，不再执行赋值；如果不退出而要继续，就必须提供一个备用 Config。
+- 没有 return 且只有打印的分支结果为 ()，无法与 Config 一致。
+- 可以直接 match 函数调用，不强制声明 parse_result 中间变量。
+- 按值 match 绑定 Config 或 String 会移动内部数据，之后不能随意再使用原 Result。
+- 只问成功或失败时用 is_ok/is_err，不需要先拆出内部值。仅检查状态的方法借用结果。
+- 同理，if/else 可以产生值；分支末尾加分号会丢弃调用结果，变成 ()。
+- ref config 得到 &Config，不能赋给要求 Config 的变量；不要为消除报错随意加 ref。
+
+测试里预期成功却得到 Err 时，用 panic! 让测试明确失败。只 eprintln 再 return 会正常结束测试，可能产生假通过。tests 子模块需要通过 super 引入 Config 和被测函数。
+
+## 34. 错误传播、标准错误与退出码
+
+```rust
+fn search_file(config: &Config) -> Result<(), std::io::Error> {
+    let contents = fs::read_to_string(&config.file_path)?;
+    // 搜索与打印……
+    Ok(())
+}
+```
+
+- ? 遇到成功就取出 String 继续；遇到错误就提前返回当前函数的 Err，不自动打印。
+- Result<(), E> 成功时只表达操作完成，不返回业务数据。
+- 调用者可用 if let Err(error) = search_file(&config) 只处理失败。
+- std::io::Error 经 {} 格式化产生系统错误说明；read_to_string 本身不打印。
+- error_log 是普通 String，不会自动关联错误。文件不存在却手写“参数非法”，提示就会不对应。
+- println 写 stdout，eprintln 写 stderr；用 > 保存结果时二者可分开，当前主流程已去掉配置调试输出。
+- std::process::exit(1) 直接结束进程并返回非零退出码。return 只退出当前函数。
+- PowerShell 的 $LASTEXITCODE 应在目标命令后立即查看；重新运行成功命令后为 0 是预期行为。
+- 用户已理解基本用法，不继续在输出重定向上反复练习。
+
+## 35. str、String 与返回借用的生命周期
+
+- String 拥有可变长 UTF-8 文本并管理存储；&str 借用一段文本，引用携带地址和字节长度。
+- str 自身是动态大小类型，不能像 u16 一样直接按值定义普通局部变量，通常通过引用使用。
+- String 用于持有数据；只查看或搜索文本时 &str 很常用。
+- 借用不会延长原数据的存活时间；外层引用不能在其借用的内层 String 释放后再使用。
+
+```rust
+fn get_text(text: &str) -> &str {
+    text
+}
+```
+
+只有一个输入引用时，编译器可按省略规则推断返回引用与它关联，可以省略显式标注。
+
+```rust
+fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str>
+```
+
+- <'a> 声明生命周期参数，contents 与返回元素共享该标注，约束结果的使用范围。
+- 标注描述借用关系，不创建数据、不延长寿命；也不能只理解成运行时来源标签。
+- 多个引用输入时，需要指明返回引用的关系；当前结果借自 contents，不借自 query。
+- 在函数中直接 result.push(line)，不要 line.to_string()；后者创建 String。
+- 调用处写 Vec<&str> 即可；函数中声明的 'a 名字不会自动出现在调用者作用域。
+- 输入已经是 &str 时直接传；拥有 String 时借用为 &String，可自动转换为 &str。
+- 忽略大小写函数也返回原始 line，不返回临时 lower_line 的引用。
+- 当前两个搜索函数均返回 Vec<&str>，因此 search_file 中 if/else 类型一致。
+
+已通过 test_search_query_scope：contents 在外层，query 在内层创建，离开内层后 query 释放，外层结果仍可使用。它验证返回行依赖原文，与关键词的存活时间无关。
+
+## 36. 行号搜索与元组容器
+
+```rust
+fn search_with_line_number<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<(usize, &'a str)>
+```
+
+- enumerate 给出 (number, line)，number 是从 0 开始的下标，line 是原文的一行 &str。
+- 返回每个元素是 (usize, &str) 元组，容器声明为 Vec<(usize, &'a str)>。
+- push((number + 1, line)) 只有一个参数：整个元组；push(number, line) 是两个参数，不符合 push 签名。
+- for (number, line) in &ret 可拆开结果打印。
+- 测试匹配第一、第三行，预期为 vec![(1, 原始第一行), (3, 原始第三行)]，已通过。
+- 本函数固定忽略大小写，仅用于练习返回元组、容器、原文引用；主流程没有接入，不继续为它扩展模式管理。
+- #[allow(dead_code)] 局部关闭未使用警告，#[un] 不是有效写法。
+- 两个同名 let 会遮蔽：先调用一次搜索丢弃结果，再新建 ret 调用另一函数没有必要。
+
+## 37. 下一步：迭代器 next（尚未验证）
+
+```rust
+let numbers: [u16; 2] = [10, 20];
+let mut iterator = numbers.iter();
+println!("{:?}", iterator.next());
+println!("{:?}", iterator.next());
+println!("{:?}", iterator.next());
+```
+
+预期 Some(10)、Some(20)、None。这里 next 返回 Option<&u16>，迭代器 mut 用于更新内部位置，数组本身未修改。先观察 for 反复取元素的关系，再逐步讲 map/filter/collect；示例已给，用户要求先记笔记，尚未收到运行反馈。
+
+学习方法：库方法用到再查；关注接收类型、返回类型和对原数据的影响。用户目前觉得所有权、借用尚可判断，主要卡在多种语法表达同一目的和库方法不熟，后续不堆新语法。

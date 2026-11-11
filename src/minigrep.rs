@@ -1,15 +1,16 @@
 use std::env;
 use std::fs;
+
 struct Config {
     query: String,
     file_path: String,
 }
 
-fn search(query: &str, contents: &str) -> Vec<String> {
-    let mut result = Vec::new();
+fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut result: Vec<&'a str> = Vec::new();
     for line in contents.lines() {
         if line.contains(query) {
-            result.push(line.to_string());
+            result.push(line);
         } else {
             continue;
         }
@@ -17,17 +18,30 @@ fn search(query: &str, contents: &str) -> Vec<String> {
     result
 }
 
-fn search_case_insensitive(query: &str, contents: &str) -> Vec<String> {
-    let mut result: Vec<String> = Vec::new();
+fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut result: Vec<&'a str> = Vec::new();
     let lower_query: String = query.to_lowercase();
 
     for line in contents.lines() {
         let lower_line: String = line.to_lowercase();
         if lower_line.contains(lower_query.as_str()) {
-            result.push(line.to_string());
+            result.push(line);
         }
     }
     result
+}
+
+#[allow(dead_code)]
+fn search_with_line_number<'a>(query: &str, contents: &'a str) -> Vec<(usize, &'a str)> {
+    let mut ret: Vec<(usize, &'a str)> = Vec::new();
+    let lower_query: String = query.to_lowercase();
+    for (number, line) in contents.lines().enumerate() {
+        let lower_line: String = line.to_lowercase();
+        if lower_line.contains(lower_query.as_str()) {
+            ret.push((number + 1, line));
+        }
+    }
+    ret
 }
 
 fn parse_args(args: &[String]) -> Result<Config, String> {
@@ -79,6 +93,7 @@ mod tests {
     use super::parse_args;
     use super::search;
     use super::search_case_insensitive;
+    use super::search_with_line_number;
     #[test]
     fn test_search() {
         let expected: Vec<String> = vec![
@@ -87,7 +102,7 @@ mod tests {
         ];
         let contents: &str = "AT32 is running.\nUART is ready.\nAT32 sends data.";
         let query: &str = "AT32";
-        let ret: Vec<String> = search(query, contents);
+        let ret: Vec<&str> = search(query, contents);
         assert_eq!(ret, expected);
     }
 
@@ -95,7 +110,7 @@ mod tests {
     fn test_search_no_match() {
         let contents: &str = "TTFE is running.\nUART is ready.\nAT32 sends data.";
         let query: &str = "AABC";
-        let ret: Vec<String> = search(query, contents);
+        let ret: Vec<&str> = search(query, contents);
         assert!(ret.is_empty());
     }
     #[test]
@@ -106,7 +121,7 @@ mod tests {
         ];
         let contents: &str = "AT32 is running.\nUART is ready.\nAT32 sends data.";
         let query: &str = "aT32";
-        let ret: Vec<String> = search_case_insensitive(query, contents);
+        let ret: Vec<&str> = search_case_insensitive(query, contents);
         assert_eq!(ret, expected);
     }
     #[test]
@@ -132,5 +147,23 @@ mod tests {
         let args: Vec<String> = vec!["serial_rust.exe".to_string(), "AT32".to_string()];
         let result: Result<Config, String> = parse_args(&args);
         assert!(result.is_err());
+    }
+    #[test]
+    fn test_search_query_scope() {
+        let contents: String = String::from("AT32 is running.\nUART is ready.");
+        let ret: Vec<&str>;
+        {
+            let query: String = String::from("AT32");
+            ret = search(&query, &contents);
+        }
+        assert_eq!(ret, vec!["AT32 is running."]);
+    }
+    #[test]
+    fn test_search_with_line_number() {
+        let contents: &str = "AT32 is running.\nUART is ready.\nat32 sends data.";
+        let expected: Vec<(usize, &str)> = vec![(1, "AT32 is running."), (3, "at32 sends data.")];
+        let ret: Vec<(usize, &str)> = search_with_line_number("aT32", contents);
+
+        assert_eq!(ret, expected);
     }
 }
