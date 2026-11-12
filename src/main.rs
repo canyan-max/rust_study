@@ -30,10 +30,14 @@
 //     );
 // }
 
+mod array_slice;
 mod minigrep;
+mod struct_enmu_const;
 mod tuple_exercises;
 #[allow(dead_code)]
 fn main() {
     // minigrep::minigrep_start();
-    tuple_exercises::tuple_code_start();
+    // tuple_exercises::tuple_code_start();
+    // array_slice::array_slice_code_start();
+    struct_enmu_const::struct_enmu_const_run();
 }
