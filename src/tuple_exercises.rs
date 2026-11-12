@@ -5,6 +5,7 @@ fn reverse(pair: (i32, bool)) -> (bool, i32) {
 
     (boolean, ineger)
 }
+
 fn split_u16(value: u16) -> (u8, u8) {
     let [high, low] = value.to_be_bytes();
     (high, low)

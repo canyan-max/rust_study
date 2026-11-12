@@ -39,5 +39,6 @@ fn main() {
     // minigrep::minigrep_start();
     // tuple_exercises::tuple_code_start();
     // array_slice::array_slice_code_start();
-    struct_enmu_const::struct_enmu_const_run();
+    // struct_enmu_const::struct_run();
+    struct_enmu_const::enum_run();
 }
