@@ -4,7 +4,7 @@ Rust 学习代码和复盘文档，结合 C、AT32 MCU 和串口协议实践。
 
 ## 当前学习入口
 
-当前 `src/main.rs` 运行命令行组帧练习，通过 `src/frame_tools.rs` 学习模块、结构体、借用、Result、错误枚举、CRC16 和单元测试。
+当前 `src/main.rs` 调用 `exercises::struct_enmu_const::constant_run()`，运行自定义类型章节的常量练习。切换练习时修改 main 中的调用。minigrep 模块仍保留，相关七项测试由 `cargo test` 运行。
 
 ```powershell
 cargo run
@@ -16,6 +16,28 @@ cargo test
 - [复盘笔记](doc/Rust复盘笔记.md)
 
 `src/main.rs` 中还保留了注释形式的早期练习和 GUI 入口。下方是此前已验证的图形监视器说明；当前入口不会启动 GUI，相关命令参数需恢复 GUI 入口后使用。当前练习已接入 CRC16，帧尾不再是占位字节。
+
+## 源码分层
+
+```text
+src/
+├── main.rs                   # 程序入口，选择本次练习
+├── exercises.rs              # 声明下面目录中的练习模块
+├── exercises/
+│   ├── array_slice.rs
+│   ├── tuple_exercises.rs
+│   ├── struct_enmu_const.rs
+│   └── generics_exercises.rs # 暂空，尚未声明模块
+├── minigrep.rs               # 已完成的命令行综合练习
+├── frame_tools.rs            # 组帧和 CRC 练习
+├── app.rs                    # 历史图形监视器
+├── protocol.rs
+└── serial_worker.rs
+```
+
+`mod exercises;` 加载 exercises.rs；其中的 `pub mod array_slice;` 加载 exercises/array_slice.rs。main 中通过 `exercises::array_slice::array_slice_code_start()` 调用。
+
+新增练习时，在 exercises/ 添加文件，在 exercises.rs 声明模块，再从 main 调用公开入口。不需要新建另一个 src 或 Cargo 包。历史 GUI 文件仍按原模块路径保留。
 
 ## MPPT 串口监视器（此前实践）
 

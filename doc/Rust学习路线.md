@@ -1,6 +1,6 @@
 # Rust 学习路线
 
-更新日期：2026-11-12
+更新日期：2026-11-13
 
 ## 当前教材与目标
 
@@ -17,11 +17,11 @@
 
 ## 当前进度
 
-- 本轮复习已到 2.3 数组和切片；用户确认基本理解，并手写 src/array_slice.rs。
+- 本轮复习已到 2.3 数组和切片；用户确认基本理解，并手写 src/exercises/array_slice.rs。
 - 已检查：数组声明、重复初始化、len、整数组借给切片参数、范围切片、空切片判断、指针地址打印。
 - 已将空切片检查放在 slice[0] 之前，避免空切片索引 panic。
 - 已区分 size_of_val 得到字节大小与 as_ptr 配合 {:p} 打印地址。
-- 当前 main 调用 array_slice::array_slice_code_start()。
+- 当前目录已分层到 src/exercises/；main 已切换调用 exercises::struct_enmu_const::constant_run()，掌握情况按反馈逐项确认。
 - 下一节开始结构体；第 1 章与第 2 章其他内容已接触，但未逐页核验全部练习，不记为全书逐页完成。
 - 原 iter()/next() 专项计划暂缓；目前未收到该例子的运行反馈，后续在相关章节再补。
 
