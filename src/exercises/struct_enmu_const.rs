@@ -5,7 +5,7 @@ struct Person {
     age: u8,
 }
 struct Unit;
-struct Tuple_struct(f32, f32);
+struct TupleStruct(f32, f32);
 struct Point {
     x: f32,
     y: f32,
@@ -26,11 +26,11 @@ pub fn struct_run() {
     let bottom_right = Point { x: 5.2, ..point };
     println!("second point: ({}, {})", bottom_right.x, bottom_right.y);
 
-    let pair = Tuple_struct(0.21, 0.1);
-    println!("Tuple_struct : (0={}, 1={})", pair.0, pair.1);
+    let pair = TupleStruct(0.21, 0.1);
+    println!("TupleStruct : (0={}, 1={})", pair.0, pair.1);
 
-    let Tuple_struct(integer, decimal) = pair;
-    println!("Tuple_struct contains {:?} and {:?}", integer, decimal);
+    let TupleStruct(integer, decimal) = pair;
+    println!("TupleStruct contains {:?} and {:?}", integer, decimal);
 }
 
 enum WebEvent {

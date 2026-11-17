@@ -29,15 +29,16 @@
 //         Box::new(move |context| Ok(Box::new(app::MonitorApp::new(context, demo, auto_connect)))),
 //     );
 // }
-
-mod exercises;
-mod minigrep;
 #[allow(dead_code)]
+mod exercises;
+#[allow(dead_code)]
+mod minigrep;
 fn main() {
     // minigrep::minigrep_start();
     // exercises::tuple_exercises::tuple_code_start();
     // exercises::array_slice::array_slice_code_start();
     // exercises::struct_enmu_const::struct_run();
     // exercises::struct_enmu_const::enum_run();
-    exercises::struct_enmu_const::constant_run();
+    // exercises::struct_enmu_const::constant_run();
+    exercises::unpack::unpack_run();
 }
