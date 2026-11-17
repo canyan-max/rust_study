@@ -18,6 +18,23 @@ fn unpack_frame(recevicebuff: &[u8]) -> Result<&[u8], UnpackError> {
     }
     Ok(&recevicebuff[3..3 + data_len])
 }
+fn frame_55aa_build(length: u8, packs: &mut Vec<u8>, datas: &[u8]) -> Result<usize, UnpackError> {
+    if 0 == length || length >= 0xff {
+        return Err(UnpackError::InLengthShort);
+    }
+
+    let payload = datas
+        .get(..usize::from(length))
+        .ok_or(UnpackError::InLengthShort)?;
+    packs.extend_from_slice(&[
+        (FRAME_HEAD_AA >> 8) as u8,
+        (FRAME_HEAD_AA & 0x00ff) as u8,
+        length,
+    ]);
+    packs.extend_from_slice(payload);
+
+    Ok(packs.len())
+}
 fn handle_payload(data: &[u8]) {
     println!("unpack length={}", data.len());
     println!("unpack successful{:02X?}", data);
@@ -49,11 +66,21 @@ fn frame_55aa_buffer_process(buffer: &mut Vec<u8>) {
 }
 pub fn unpack_run() {
     let mut buffer: Vec<u8> = Vec::new();
-    buffer.extend_from_slice(&[0xAA, 0x55, 0x02]);
-    buffer.extend_from_slice(&[0x11, 0x12]);
-    buffer.extend_from_slice(&[0xAA, 0x55, 0x01, 0x33]);
-    buffer.extend_from_slice(&[0xff, 0xfa, 0xAA, 0x55, 0x01, 0x33]);
-    frame_55aa_buffer_process(&mut buffer);
+    // buffer.extend_from_slice(&[0xAA, 0x55, 0x02]);
+    // buffer.extend_from_slice(&[0x11, 0x12]);
+    // buffer.extend_from_slice(&[0xAA, 0x55, 0x01, 0x33]);
+    // buffer.extend_from_slice(&[0xff, 0xfa, 0xAA, 0x55, 0x01, 0x33]);
+    // frame_55aa_buffer_process(&mut buffer);
+    let datas: [u8; 3] = [0x01, 0x02, 0x03];
+    match frame_55aa_build(2, &mut buffer, &datas) {
+        Ok(ret_len) => {
+            println!("pack build length={}", ret_len);
+        }
+        Err(_) => {
+            println!("pack error");
+        }
+    };
+    println!("pack{:?}", buffer)
 }
 
 #[cfg(test)]
