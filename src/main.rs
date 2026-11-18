@@ -40,5 +40,8 @@ fn main() {
     // exercises::struct_enmu_const::struct_run();
     // exercises::struct_enmu_const::enum_run();
     // exercises::struct_enmu_const::constant_run();
-    exercises::unpack::unpack_run();
+    // exercises::unpack::unpack_run();
+    // exercises::serial_io::serial_run();
+    // exercises::serial_io::serial_thread_run();
+    exercises::serial_io::thread_demo();
 }
