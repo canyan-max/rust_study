@@ -1,4 +1,4 @@
-use super::unpack::FrameBuffer;
+use super::protocol_recover::protocol_recover_process;
 use std::time::Duration;
 pub fn serial_run() {
     let ports = serialport::available_ports().expect("No ports found!");
@@ -20,19 +20,25 @@ pub fn serial_run() {
     }
 
     let mut serial_buf: Vec<u8> = vec![0; 32];
-    let mut recevice_buffer: FrameBuffer = FrameBuffer::new();
+    let mut recevice_buffer: Vec<u8> = Vec::new();
     loop {
         match port.read(serial_buf.as_mut_slice()) {
             Ok(count) => {
-                // println!("收到：{:02X?}", &serial_buf[..count]);
-                recevice_buffer.receive(&serial_buf[..count]);
-                recevice_buffer.process_pack();
-                // break;
+                println!("收到：{:02X?}", &serial_buf[..count]);
+                recevice_buffer.extend_from_slice(&serial_buf[..count]);
+                protocol_recover_process(&mut recevice_buffer);
             }
-            Err(_) => {}
+            Err(error) => {
+                if error.kind() == std::io::ErrorKind::TimedOut {
+                    continue;
+                }
+                eprintln!("串口读取失败：{}", error);
+                break;
+            }
         }
     }
 }
+
 pub fn serial_thread_run() {
     let handle = std::thread::spawn(|| {
         serial_run();

@@ -1,6 +1,6 @@
 # Rust 复盘笔记
 
-更新日期：2026-11-18
+更新日期：2026-11-19
 
 这里只保留知识速查和容易混淆的写法。当前掌握程度见 [学习进度](学习进度.md)，接下来的任务见 [学习路线与复写计划](Rust学习路线.md)。
 
@@ -74,7 +74,6 @@ let data: &[u8] = &buffer[0..2];
 - &[u8] 用途类似 C 的“数据指针 + 长度”，不复制数据；&mut [u8] 可以修改原数据。
 - a..b 包含 a、不包含 b；a..=b 包含 b；切片自己的下标从 0 开始。
 - 长度为 5 时，3..5 合法，3..=5 越界；2..2 是空切片。
-- buffer[0] 是 u8，&buffer[0] 是 &u8，&buffer[0..1] 是 &[u8]，不能混用。
 - len() 是元素个数；capacity() 是容器当前可容纳的元素数；size_of_val() 是值的字节大小。
 - 直接索引、切片可能越界 panic；访问前检查长度，或使用 get()。
 
@@ -95,16 +94,47 @@ Vec<T> 也可保存自定义结构体，但同一容器的元素类型一致。e
 
 ## 4. 遍历、元组与 Option
 
+本轮重点：先判断要下标、一个元素还是一段数据，再写类型。
+
+| 表达式（buffer 为字节数组或 Vec<u8>） | 类型或每轮元素类型 |
+| --- | --- |
+| buffer.len() | usize，元素数量，不是可遍历范围 |
+| buffer[0] | u8，一个值 |
+| &buffer[0] | &u8，一个元素的引用 |
+| &buffer[0..2] | &[u8]，一段数据的引用 |
+| buffer.iter() | 每轮 &u8 |
+| buffer.iter_mut() | 每轮 &mut u8 |
+| buffer.iter().enumerate() | 每轮 (usize, &u8) |
+
 ```rust
-for (index, byte) in buffer.iter_mut().enumerate() {
+// 下标遍历：index 是 usize，buffer[index] 是 u8。
+for index in 0..buffer.len() {
+    println!("{:02X}", buffer[index]);
+}
+
+// 元素遍历：byte 是 &u8，*byte 是 u8。
+for byte in buffer.iter() {
+    println!("{:02X}", *byte);
+}
+```
+
+```rust
+// buffer 需要可变；byte 是 &mut u8。
+for byte in buffer.iter_mut() {
     *byte = 0x55;
-    println!("index={} byte={:02X}", index, *byte);
+}
+
+// 同时需要下标和元素时使用 enumerate()。
+for (index, byte) in buffer.iter().enumerate() {
+    println!("index={} byte={:02X}", index, byte);
 }
 ```
 
 - iter() 每轮提供共享引用，iter_mut() 提供可变引用；into_iter() 按值迭代容器，非 Copy 值可能被移动。
 - enumerate() 加入从 0 开始的计数，产生 (下标, 元素) 元组；for 的括号负责解构。
 - byte 只引用一个元素，不能写 byte[index]。
+- *byte + 1 只计算并丢弃结果；修改原元素要写 *byte += 1 或 *byte = *byte + 1。
+- 打印 &u8 时格式化支持引用，可直接传 byte；数值运算或赋值时按需要写 *byte。
 - 只用下标时可写 for index in 0..buffer.len()，不能直接 for index in buffer.len()。
 - (10..13) 的括号用于组合范围表达式；(10, 13) 才是两个元素的元组。
 - push((number, line)) 添加一个元组，push(number, line) 则是传入两个参数。
@@ -266,6 +296,24 @@ AA 55 04 09 C4 FF 9C EF 37
 
 这叫重新同步，不是修复错误字节。当前还没有缓存上限和假帧头超时处理。
 
+### 当前 A8 独立复写协议
+
+文件为 src/exercises/protocol_recover.rs，与上面的 AA55 + CRC 练习不同。
+
+```text
+A8 | payload长度 u8 | payload N字节 | 校验 u8
+0       1              2开始         N+2
+```
+
+- 整帧 N + 3；空 payload 允许，组包长度超过 255 则返回错误。
+- 对帧头、长度、payload 使用 u8 的 wrapping_add 累加，最终 (!sum).wrapping_add(1)。校验不包含自身及后续帧。
+- 样例：数据 [01, 02, 03]，完整帧 [A8, 03, 01, 02, 03, 4F]。
+- 解包顺序：最小长度检查 → 帧头 → 整帧长度 → 校验 → 返回 payload 借用。
+- 组包返回 Result<Vec<u8>, ProtocolError>；解包返回 Result<&[u8], ProtocolError>；处理函数接收 &mut Vec<u8>。
+- 数据未齐应保留并退出等待；成功时先使用 payload、计算长度，再 drain(0..frame_length)，之后不继续使用该借用。
+- 坏帧头或坏校验后丢一个字节再循环；数据不完整则退出等待。前者寻找下一帧，后者保留半帧。
+- 此策略没有假帧头超时机制；遇到看似合法但长度很大的头部，仍可能等待后续数据，本阶段不扩展。
+
 ## 11. 串口库速查
 
 | 调用 | 作用或返回结果 |
@@ -317,7 +365,6 @@ handle.join().expect("后台线程发生了panic");
 - tx.send() 发送线程消息，rx.recv() 等待线程消息，与串口 read 不同。
 - join() 等待线程结束，不负责停止线程；无限串口循环不退出，join 就一直等待。
 - recv 也会阻塞；这个例子还不等于完成界面的非阻塞更新。
-- 当前先掌握并修改示例，独立复写完成后再接回串口；Fn 系列和 Tokio 暂缓。
 
 ## 13. 测试与排错
 
@@ -333,10 +380,12 @@ mod tests {
 
 - assert_eq! 比较实际值和预期值，失败时显示 left/right；assert! 检查 bool。
 - 正常输入遇到 Err 应 panic；非法输入应得到指定错误。只打印不检查，会产生假通过。
+- 可以显式写全 Ok、指定 Err、其他 Err 分支；关键是只有预期结果正常结束，其他结果都 panic。
+- 处理函数消费整帧后，接收 buffer 应为空，不能再要求它等于 payload；payload 内容应在解包成功时比较。
+- 验证同一次调用内恢复：坏帧和好帧一起追加到同一缓冲区，再调用一次处理函数；不能用新 Vec 覆盖残余。
 - 边界输入要真正填在待测参数上；只检查 is_ok() 不证明内容正确。
 - 测试预期应来自协议或独立已知样例，不要只从失败输出复制；协议增加 CRC 后，样本、长度和数据范围需要同步。
-- 坏帧后跟好帧要追加到同一缓冲区，不能赋一个新 Vec 覆盖残余。
-- 缓冲区为空只证明字节已消费，不证明业务结果已交付；目前恢复测试还结合日志观察正常帧值。
+- 缓冲区为空只证明字节已消费，不证明业务结果已交付。
 
 ```powershell
 cargo check
