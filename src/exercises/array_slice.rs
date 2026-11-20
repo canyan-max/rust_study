@@ -18,6 +18,16 @@ fn fill_bytes_iter_mut(array: &mut [u8], data: u8) {
         *byte = data;
     }
 }
+fn check_buffer_is_valid(array: &[u8]) {
+    match array.first() {
+        Some(byte) => {
+            println!("byte={}", byte);
+        }
+        None => {
+            println!("none byte");
+        }
+    }
+}
 pub fn array_slice_code_start() {
     let xs: [i32; 5] = [32, 1, 2, 3, 4];
     analyze_slice(&xs);
@@ -64,5 +74,16 @@ pub fn array_slice_code_start() {
     fill_bytes(&mut buff, 0xff);
     for (index, byte) in buff.iter().enumerate() {
         print!("buffe : index={} byte={:02x} ", index, byte);
+    }
+}
+
+mod test {
+    // use crate::exercises::array_slice::check_buffer_is_valid;
+    use super::check_buffer_is_valid;
+    #[test]
+    fn test_check_buffer_is_valid() {
+        let buffer: [u8; 4] = [0; 4];
+        check_buffer_is_valid(&buffer);
+        check_buffer_is_valid(&[]);
     }
 }

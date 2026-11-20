@@ -1,3 +1,6 @@
+use super::protocol_recover::Measurement;
+use super::protocol_recover::ProtocolError;
+use super::protocol_recover::protocol_recover_pack;
 use super::protocol_recover::protocol_recover_process;
 use std::time::Duration;
 pub fn serial_run() {
@@ -9,7 +12,28 @@ pub fn serial_run() {
         .timeout(Duration::from_millis(100))
         .open()
         .expect("Failed to open port");
-    let output: [u8; 6] = [0x12, 0x22, 0x12, 0x22, 0x12, 0x22];
+
+    let test_var: Measurement = Measurement::new(2500, -100);
+    let content: [u8; 4] = test_var.to_payload();
+    let output: Vec<u8> = match protocol_recover_pack(&content) {
+        Ok(frame) => {
+            println!("{:02x?}", frame);
+            frame
+        }
+        Err(ProtocolError::HeadCodeError) => {
+            return;
+        }
+        Err(ProtocolError::InLengthError) => {
+            return;
+        }
+        Err(ProtocolError::PackLengthError) => {
+            return;
+        }
+        Err(ProtocolError::ValidationError) => {
+            return;
+        }
+    };
+
     match port.write_all(&output) {
         Ok(()) => {
             println!("send ok");
@@ -21,12 +45,16 @@ pub fn serial_run() {
 
     let mut serial_buf: Vec<u8> = vec![0; 32];
     let mut recevice_buffer: Vec<u8> = Vec::new();
+    // let mut latest: Option<Measurement> = None;
     loop {
         match port.read(serial_buf.as_mut_slice()) {
             Ok(count) => {
                 println!("收到：{:02X?}", &serial_buf[..count]);
                 recevice_buffer.extend_from_slice(&serial_buf[..count]);
-                protocol_recover_process(&mut recevice_buffer);
+                let measurements: Vec<Measurement> = protocol_recover_process(&mut recevice_buffer);
+                if let Some(measurement) = measurements.last() {
+                    measurement.show_self();
+                }
             }
             Err(error) => {
                 if error.kind() == std::io::ErrorKind::TimedOut {
