@@ -2,13 +2,57 @@
  *  [0]    [1]    [2]   [3]                          [length+2]
  */
 const PROTOCOL_RECOVER_HEAD: u8 = 0xA8;
-enum ProtocolError {
+
+pub(super) enum ProtocolError {
     HeadCodeError,
     InLengthError,
     PackLengthError,
     ValidationError,
 }
-
+pub(super) struct Measurement {
+    voltage_mv: u16,
+    current_ma: i16,
+}
+impl Measurement {
+    pub(super) fn new(voltage_mv: u16, current_ma: i16) -> Self {
+        Self {
+            voltage_mv: voltage_mv,
+            current_ma: current_ma,
+        }
+    }
+    pub(super) fn payload(buffer: &[u8]) -> Result<Self, ProtocolError> {
+        if buffer.len() < 4 {
+            return Err(ProtocolError::InLengthError);
+        }
+        // let data = Measurement {
+        //     voltage_mv: u16::from_be_bytes([buffer[0], buffer[1]]),
+        //     current_ma: i16::from_be_bytes([buffer[2], buffer[3]]),
+        // };
+        Ok(Measurement {
+            voltage_mv: u16::from_be_bytes([buffer[0], buffer[1]]),
+            current_ma: i16::from_be_bytes([buffer[2], buffer[3]]),
+        })
+    }
+    pub(super) fn to_payload(&self) -> [u8; 4] {
+        let mut depayload_buffer: [u8; 4] = [0; 4];
+        depayload_buffer[0..2].copy_from_slice(&self.voltage_mv.to_be_bytes());
+        depayload_buffer[2..4].copy_from_slice(&self.current_ma.to_be_bytes());
+        depayload_buffer
+    }
+    pub(super) fn show_self(&self) {
+        println!(
+            "self->vol=>{} self->cur=>{} ",
+            self.voltage_mv, self.current_ma
+        );
+    }
+    fn conver_mv_to_v(&self) -> f32 {
+        // self.voltage_mv as f32 / 1000.0
+        f32::from(self.voltage_mv) / 1000.0
+    }
+    fn conver_ma_to_a(&self) -> f32 {
+        f32::from(self.current_ma) / 1000.0
+    }
+}
 fn protocol_recover_anti_sum(buffer: &[u8]) -> u8 {
     let mut anti_sum: u8 = 0;
     for index in 0..buffer.len() {
@@ -18,7 +62,7 @@ fn protocol_recover_anti_sum(buffer: &[u8]) -> u8 {
     anti_sum
 }
 
-fn protocol_recover_pack(buffer: &[u8]) -> Result<Vec<u8>, ProtocolError> {
+pub(super) fn protocol_recover_pack(buffer: &[u8]) -> Result<Vec<u8>, ProtocolError> {
     let mut pack_buffer: Vec<u8> = Vec::new();
     if buffer.len() > 0xff {
         return Err(ProtocolError::PackLengthError);
@@ -37,7 +81,12 @@ fn protocol_recover_unpack(data_of_in: &[u8]) -> Result<&[u8], ProtocolError> {
         return Err(ProtocolError::InLengthError);
     }
     // check head is valid
-    if PROTOCOL_RECOVER_HEAD != data_of_in[0] {
+    //
+    if let Some(head_code) = data_of_in.first() {
+        if *head_code != PROTOCOL_RECOVER_HEAD {
+            return Err(ProtocolError::HeadCodeError);
+        }
+    } else {
         return Err(ProtocolError::HeadCodeError);
     }
     // check the data lenth is valid
@@ -54,13 +103,20 @@ fn protocol_recover_unpack(data_of_in: &[u8]) -> Result<&[u8], ProtocolError> {
     }
     return Ok(&data_of_in[2..2 + data_length]);
 }
-fn payload() {}
-pub fn protocol_recover_process(buffer: &mut Vec<u8>) {
+
+pub(super) fn protocol_recover_process(buffer: &mut Vec<u8>) -> Vec<Measurement> {
+    let mut measurements: Vec<Measurement> = Vec::new();
     loop {
         match protocol_recover_unpack(buffer) {
             Ok(frame) => {
                 let frame_length = frame.len() + 3;
                 println!("successful：{:02X?}", frame);
+                match Measurement::payload(frame) {
+                    Ok(content) => measurements.push(content),
+                    Err(_) => {
+                        println!("err payload");
+                    }
+                }
                 buffer.drain(0..frame_length);
             }
             Err(ProtocolError::HeadCodeError) => {
@@ -78,11 +134,13 @@ pub fn protocol_recover_process(buffer: &mut Vec<u8>) {
             }
         }
     }
+    measurements
 }
 
 #[cfg(test)]
 mod test {
     // #[warn(unused)]
+    use super::Measurement;
     use super::ProtocolError;
     use super::protocol_recover_pack;
     use super::protocol_recover_process;
@@ -237,5 +295,23 @@ mod test {
         buffer.extend_from_slice(&[0xA8, 0x03, 0x01, 0x02, 0x03, 0x4F]);
         protocol_recover_process(&mut buffer);
         assert!(buffer.is_empty());
+    }
+    #[test]
+    fn test_measurement_round_trip() {
+        let datas: Measurement = Measurement::new(2500, -100);
+        let buffer: [u8; 4] = datas.to_payload();
+        assert_eq!(buffer, [0x09, 0xC4, 0xFF, 0x9C]);
+        match Measurement::payload(&buffer) {
+            Ok(content) => {
+                // content.show_self();
+                assert_eq!(content.voltage_mv, 2500);
+                assert_eq!(content.current_ma, -100);
+                println!("电压：{:.3} V", content.conver_mv_to_v());
+                println!("电流：{:.3} A", content.conver_ma_to_a());
+            }
+            Err(_) => {
+                panic!("err payload");
+            }
+        }
     }
 }
