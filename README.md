@@ -4,10 +4,10 @@ Rust 学习代码和复盘文档，结合 C、AT32 MCU 和串口协议实践。
 
 ## 当前学习入口
 
-当前 `src/main.rs` 调用 `exercises::struct_enmu_const::constant_run()`，运行自定义类型章节的常量练习。切换练习时修改 main 中的调用。minigrep 模块仍保留，相关七项测试由 `cargo test` 运行。
+当前 `src/main.rs` 解析串口名和波特率，再调用 `exercises::serial_io::serial_thread_run()`。串口流程先发送一帧 A8 测量数据，再循环接收、解析并累计统计；终端用 Ctrl+C 退出。minigrep 和旧练习仍保留。
 
 ```powershell
-cargo run
+cargo run -- COM14 9600
 cargo test
 ```
 
@@ -15,7 +15,9 @@ cargo test
 - [学习进度](doc/学习进度.md)
 - [复盘笔记](doc/Rust复盘笔记.md)
 
-`src/main.rs` 中还保留了注释形式的早期练习和 GUI 入口。下方是此前已验证的图形监视器说明；当前入口不会启动 GUI，相关命令参数需恢复 GUI 入口后使用。当前练习已接入 CRC16，帧尾不再是占位字节。
+2026-11-21：`cargo check` 通过，当前入口下的全工程 34 项测试通过。A8 练习使用单字节累加取反加一校验，旧 AA55 练习使用 CRC16。
+
+`src/main.rs` 中还保留了注释形式的早期练习和 GUI 入口。下方是此前已验证的图形监视器说明，包含历史发布包信息；GUI 启动、打包和验证命令均需先恢复 GUI 入口，不能直接用于当前串口练习入口。
 
 ## 源码分层
 
@@ -27,6 +29,9 @@ src/
 │   ├── array_slice.rs
 │   ├── tuple_exercises.rs
 │   ├── struct_enmu_const.rs
+│   ├── protocol_recover.rs   # 当前 A8 协议和测量结构体
+│   ├── serial_io.rs          # 串口收发、统计和线程包装
+│   ├── unpack.rs             # 旧 AA55 + CRC 练习
 │   └── generics_exercises.rs # 暂空，尚未声明模块
 ├── minigrep.rs               # 已完成的命令行综合练习
 ├── frame_tools.rs            # 组帧和 CRC 练习

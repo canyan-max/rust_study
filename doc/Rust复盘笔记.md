@@ -1,6 +1,6 @@
 # Rust 复盘笔记
 
-更新日期：2026-11-19
+更新日期：2026-11-21
 
 这里只保留知识速查和容易混淆的写法。当前掌握程度见 [学习进度](学习进度.md)，接下来的任务见 [学习路线与复写计划](Rust学习路线.md)。
 
@@ -147,6 +147,11 @@ if let Some(byte) = buffer.get_mut(1) {
 
 get/get_mut 返回 Option<&T>/Option<&mut T>：有元素为 Some，无元素为 None。Some/None 是枚举变体，0 也是合法元素，不等于 None。if let 适合只关心一种分支，match 适合处理全部分支。
 
+- first()/last() 返回 Option<&T>，安全取首项或末项；空 Vec 也是合法容器，len() 为 0。
+- measurements.last() 的 Some 中是 &Measurement，不是 Vec；整个容器的条数用 measurements.len()。
+- 收到半帧也要累计字节数，因此字节及测量条数统计放在 if let 外：recoder.recoder(count, measurements.len())。
+- 在循环外保存 Option<Measurement> 可表示“尚无最近测量值”；只需显示本批最后一条时，直接 last() 即可。
+
 ## 5. Result、match、? 与 expect
 
 Result<T, E> 只有一个结果值：Ok(T) 或 Err(E)，不是同时返回两项。Result<Vec<u8>, String> 与里面的 Vec<u8> 是不同类型。
@@ -270,6 +275,7 @@ use super::unpack::FrameBuffer;
 - mod 声明模块；use 把名字引入当前作用域，不执行函数、不复制代码。
 - crate 指当前 crate 的根，super 指父模块，不是测试专用语法。
 - pub struct 公开类型，方法和字段分别控制可见性；外部通过公开方法操作时，字段可保持私有。
+- 当前兄弟练习模块共享的类型、函数和方法使用 pub(super)；返回类型的可见范围也要与函数接口匹配。暂不深入其他可见性写法。
 - 可以保留模块前缀调用，不强制 use 每个函数。
 - 某个练习暂时不用，可对函数或模块加 #[allow(dead_code)]；放在 main 函数上不会覆盖其他模块。
 
@@ -310,6 +316,8 @@ A8 | payload长度 u8 | payload N字节 | 校验 u8
 - 样例：数据 [01, 02, 03]，完整帧 [A8, 03, 01, 02, 03, 4F]。
 - 解包顺序：最小长度检查 → 帧头 → 整帧长度 → 校验 → 返回 payload 借用。
 - 组包返回 Result<Vec<u8>, ProtocolError>；解包返回 Result<&[u8], ProtocolError>；处理函数接收 &mut Vec<u8>。
+- 当前处理函数返回 Vec<Measurement>；没有完整有效测量数据时，返回的 Vec 可以为空。Measurement 的 payload 是 4 字节：电压 u16 大端、电流 i16 大端。
+- 实测样例：[A8, 04, 09, C4, FF, 9C, EC]，表示 2500 mV、-100 mA。
 - 数据未齐应保留并退出等待；成功时先使用 payload、计算长度，再 drain(0..frame_length)，之后不继续使用该借用。
 - 坏帧头或坏校验后丢一个字节再循环；数据不完整则退出等待。前者寻找下一帧，后者保留半帧。
 - 此策略没有假帧头超时机制；遇到看似合法但长度很大的头部，仍可能等待后续数据，本阶段不扩展。
@@ -345,6 +353,11 @@ match port.read(serial_buf.as_mut_slice()) {
 
 串口对象销毁时关闭句柄；_port 仍持有对象，下划线前缀不使它提前释放。终端练习目前用 Ctrl+C 退出。serialport 为同步库，tokio-serial 用于异步；现在先不换库。
 
+- Ok 分支中的局部 Vec 在作用域结束时释放，逐次创建不会自动累积泄漏；循环外的接收 Vec 则跨 read 保留半帧。
+- ReceiveStats 保存累计字节数和有效测量条数；read 次数、测量条数、字节数是不同统计口径。
+- Instant::now() 记录计时起点，elapsed() 返回 Duration；报告后更新起点，不清零计数时显示的是累计统计。
+- print! 不换行可能暂未显示输出，调试接收流程时用 println!，避免误认为代码未执行。
+
 ## 12. 闭包、线程与通道（刚入门）
 
 ```rust
@@ -364,6 +377,7 @@ handle.join().expect("后台线程发生了panic");
 - move 按值捕获闭包实际使用的外部变量；这里 tx 移入闭包，rx 留在主线程。Copy 值会复制，move 不等于 clone，也不会延长所捕获引用指向数据的寿命。
 - tx.send() 发送线程消息，rx.recv() 等待线程消息，与串口 read 不同。
 - join() 等待线程结束，不负责停止线程；无限串口循环不退出，join 就一直等待。
+- 将函数收到的 &str 传给 spawn 前，先 to_string()，再用 move 把拥有的 String 交给闭包；move 一个引用不会复制其指向的文本。立即 join 也不会取消 spawn 对捕获数据的 'static 要求。
 - recv 也会阻塞；这个例子还不等于完成界面的非阻塞更新。
 
 ## 13. 测试与排错
@@ -416,3 +430,18 @@ cargo test test_frame_error_and_right -- --nocapture
 - Cargo 的 -- 把后续参数传给程序。运行 minigrep 前先切换 main 的入口，不能在串口或线程入口下测试其命令行参数。
 
 依赖下载若再次出现 CRYPT_E_REVOCATION_OFFLINE，历史曾用单次命令配置 http.check-revoke=false 绕过吊销服务器不可达；这是临时降低该检查的排障办法，不作为默认项目设置。
+
+## 15. 串口命令行参数复写
+
+```rust
+fn parse_args(args: &[String]) -> Result<Config, String>
+```
+
+- args.get(1) 返回 Option<&String>，判断有没有串口名；args.get(2) 取得波特率文本。
+- text.parse::<u32>() 返回 Result<u32, ParseIntError>，判断能否转成数字；类型参数写在调用括号前。
+- Config 用 String 保存串口名，通过 to_string()/clone() 获取自己拥有的文本；参数列表本身只需借用。
+- &Vec<String> 可以工作；只读取列表时，&[String] 同时适用于 Vec 和数组。
+- 失败提前 return Err(...)，成功构造 Ok(Config { ... })；main 匹配结果并启动串口，无需额外 run 标志或占位初值。
+- format!("波特率格式错误：{}", error) 生成 String；println!/eprintln! 打印。解析函数返回原因、main 统一打印可避免重复输出。
+- 参数数量检查和格式转换通过，不代表端口一定存在或波特率一定受支持；打开串口仍可能失败。
+- 当前入口：cargo run -- COM14 9600。下标 0 是程序名，两个用户参数时 args.len() 为 3。

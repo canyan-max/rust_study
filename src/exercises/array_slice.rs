@@ -76,7 +76,7 @@ pub fn array_slice_code_start() {
         print!("buffe : index={} byte={:02x} ", index, byte);
     }
 }
-
+#[cfg(test)]
 mod test {
     // use crate::exercises::array_slice::check_buffer_is_valid;
     use super::check_buffer_is_valid;

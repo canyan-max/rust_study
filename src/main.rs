@@ -1,10 +1,8 @@
 // Release 双击启动时只显示图形窗口；调试版保留终端，便于学习和排错。
 // #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-
 // mod app;
 // mod protocol;
 // mod serial_worker;
-
 // fn main() -> eframe::Result<()> {
 //     let args: Vec<String> = std::env::args().collect();
 //     if args.iter().any(|arg| arg == "--probe") {
@@ -29,10 +27,44 @@
 //         Box::new(move |context| Ok(Box::new(app::MonitorApp::new(context, demo, auto_connect)))),
 //     );
 // }
+
 #[allow(dead_code)]
 mod exercises;
 #[allow(dead_code)]
 mod minigrep;
+struct Config {
+    port_name: String,
+    buard: u32,
+}
+fn parges_args(args: &Vec<String>) -> Result<Config, String> {
+    if args.len() != 3 {
+        return Err("input paramter err".to_string());
+    }
+    let port_name: &str = match args.get(1) {
+        Some(name) => name.as_str(),
+        None => {
+            eprintln!("请填写串口名，例如 COM14");
+            return Err("comm port error".to_string());
+        }
+    };
+    let baud_text: &str = match args.get(2) {
+        Some(text) => text.as_str(),
+        None => {
+            return Err("buard error".to_string());
+        }
+    };
+    let baud_rate: u32 = match baud_text.parse::<u32>() {
+        Ok(value) => value,
+        Err(_) => {
+            return Err("buard error".to_string());
+        }
+    };
+    let cfgs: Config = Config {
+        port_name: port_name.to_string(),
+        buard: baud_rate,
+    };
+    Ok(cfgs)
+}
 fn main() {
     // minigrep::minigrep_start();
     // exercises::tuple_exercises::tuple_code_start();
@@ -41,7 +73,16 @@ fn main() {
     // exercises::struct_enmu_const::enum_run();
     // exercises::struct_enmu_const::constant_run();
     // exercises::unpack::unpack_run();
-    exercises::serial_io::serial_run();
-    // exercises::serial_io::serial_thread_run();
-    // exercises::serial_io::thread_demo();
+    // exercises::serial_io::serial_run("COM14", 9600);
+    // exercises::serial_io::thread_demo()
+    let args: Vec<String> = std::env::args().collect();
+    match parges_args(&args) {
+        Err(error) => {
+            println!("{}", error);
+            return;
+        }
+        Ok(value) => {
+            exercises::serial_io::serial_thread_run(&value.port_name, value.buard);
+        }
+    }
 }
