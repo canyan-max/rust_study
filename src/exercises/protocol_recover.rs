@@ -45,12 +45,18 @@ impl Measurement {
             self.voltage_mv, self.current_ma
         );
     }
-    fn conver_mv_to_v(&self) -> f32 {
+    pub(super) fn conver_mv_to_v(&self) -> f32 {
         // self.voltage_mv as f32 / 1000.0
         f32::from(self.voltage_mv) / 1000.0
     }
-    fn conver_ma_to_a(&self) -> f32 {
+    pub(super) fn conver_ma_to_a(&self) -> f32 {
         f32::from(self.current_ma) / 1000.0
+    }
+    pub(super) fn get_vol_mv(&self) -> u16 {
+        self.voltage_mv
+    }
+    pub(super) fn get_cur_ma(&self) -> i16 {
+        self.current_ma
     }
 }
 fn protocol_recover_anti_sum(buffer: &[u8]) -> u8 {

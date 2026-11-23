@@ -18,9 +18,25 @@ impl fmt::Display for Matrix {
         write!(f, "( {} {} )", self.2, self.3)
     }
 }
+
 fn transpose(matrix: Matrix) -> Matrix {
     Matrix(matrix.0, matrix.2, matrix.1, matrix.3)
 }
+
+fn parse_baud(text: &str) -> Result<u32, std::num::ParseIntError> {
+    let buard = text.parse::<u32>()?;
+    Ok(buard)
+}
+
+fn parse_measurement(cur: &str, vol: &str) -> Result<(u16, i16), std::num::ParseIntError> {
+    println!("start of parse_measurement");
+    let vol_mv: u16 = vol.parse::<u16>()?;
+    println!("start of vol_mv");
+    let cur_ma: i16 = cur.parse::<i16>()?;
+    println!("start of cur_ma");
+    Ok((vol_mv, cur_ma))
+}
+
 pub fn tuple_code_start() {
     println!("tuple_code_start");
     //

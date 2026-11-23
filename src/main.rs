@@ -36,9 +36,9 @@ struct Config {
     port_name: String,
     buard: u32,
 }
-fn parges_args(args: &Vec<String>) -> Result<Config, String> {
+fn parges_args(args: &[String]) -> Result<Config, String> {
     if args.len() != 3 {
-        return Err("input paramter err".to_string());
+        return Err("example => serial_rust.exe COM11 115200".to_string());
     }
     let port_name: &str = match args.get(1) {
         Some(name) => name.as_str(),
@@ -55,8 +55,8 @@ fn parges_args(args: &Vec<String>) -> Result<Config, String> {
     };
     let baud_rate: u32 = match baud_text.parse::<u32>() {
         Ok(value) => value,
-        Err(_) => {
-            return Err("buard error".to_string());
+        Err(error) => {
+            return Err(format!("波特率格式错误：{}", error));
         }
     };
     let cfgs: Config = Config {
@@ -65,6 +65,7 @@ fn parges_args(args: &Vec<String>) -> Result<Config, String> {
     };
     Ok(cfgs)
 }
+
 fn main() {
     // minigrep::minigrep_start();
     // exercises::tuple_exercises::tuple_code_start();
@@ -84,5 +85,31 @@ fn main() {
         Ok(value) => {
             exercises::serial_io::serial_thread_run(&value.port_name, value.buard);
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use std::panic;
+
+    // use super::Config;
+    use super::parges_args;
+    #[test]
+    fn test_parse_args_ok() {
+        let args: [String; 3] = ["--".to_string(), "COM14".to_string(), "9600".to_string()];
+        match parges_args(&args) {
+            Err(error) => {
+                panic!("合法参数解析失败：{}", error);
+            }
+            Ok(value) => {
+                assert_eq!(value.port_name, "COM14".to_string());
+                assert_eq!(value.buard, 9600);
+            }
+        }
+    }
+    #[test]
+    fn test_parse_buard_is_error() {
+        let args: [String; 3] = ["--".to_string(), "COM14".to_string(), "abc".to_string()];
+        let result = parges_args(&args);
+        assert!(result.is_err());
     }
 }

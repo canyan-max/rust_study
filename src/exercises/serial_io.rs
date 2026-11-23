@@ -1,9 +1,10 @@
 use super::protocol_recover::Measurement;
-use super::protocol_recover::ProtocolError;
+// use super::protocol_recover::ProtocolError;
 use super::protocol_recover::protocol_recover_pack;
 use super::protocol_recover::protocol_recover_process;
-// use std::time::Duration;
+use std::io::Write;
 use std::time::{Duration, Instant};
+
 struct ReceiveStats {
     bytes_count: usize,
     measurements_count: usize,
@@ -20,15 +21,35 @@ impl ReceiveStats {
         self.measurements_count += mem_size;
     }
 }
+
+fn open_recoder(path: &str) -> Result<std::fs::File, std::io::Error> {
+    let mut files = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    let metdata = files.metadata()?;
+    if 0 == metdata.len() {
+        writeln!(&mut files, "voltage current")?;
+    }
+    Ok(files)
+}
+
 pub fn serial_run(port_name: &str, buard: u32) {
     let ports = serialport::available_ports().expect("No ports found!");
     for p in ports {
         println!("{}", p.port_name);
     }
-    let mut port = serialport::new(port_name, buard)
+
+    let mut port = match serialport::new(port_name, buard)
         .timeout(Duration::from_millis(100))
         .open()
-        .expect("Failed to open port");
+    {
+        Ok(valid) => valid,
+        Err(error) => {
+            eprintln!("open serial port :{} error reason :{}", port_name, error);
+            return;
+        }
+    };
 
     let test_var: Measurement = Measurement::new(2500, -100);
     let content: [u8; 4] = test_var.to_payload();
@@ -37,16 +58,7 @@ pub fn serial_run(port_name: &str, buard: u32) {
             println!("{:02x?}", frame);
             frame
         }
-        Err(ProtocolError::HeadCodeError) => {
-            return;
-        }
-        Err(ProtocolError::InLengthError) => {
-            return;
-        }
-        Err(ProtocolError::PackLengthError) => {
-            return;
-        }
-        Err(ProtocolError::ValidationError) => {
+        Err(_) => {
             return;
         }
     };
@@ -68,6 +80,19 @@ pub fn serial_run(port_name: &str, buard: u32) {
         measurements_count: 0,
     };
     let mut last_report = Instant::now();
+    let mut file = match open_recoder("measurements.csv") {
+        Err(error) => {
+            eprintln!("open file error reasion:{}", error);
+            return;
+        }
+        Ok(valid) => {
+            match valid.metadata() {
+                Ok(info) => println!("size={} 字节", info.len()),
+                Err(error) => eprintln!("读取文件信息失败：{}", error),
+            }
+            valid
+        }
+    };
     loop {
         if last_report.elapsed() >= Duration::from_secs(5) {
             println!("recevice_byte size :{}", recoder.bytes_count);
@@ -79,11 +104,53 @@ pub fn serial_run(port_name: &str, buard: u32) {
                 println!("收到：{:02X?}", &serial_buf[..count]);
                 recevice_buffer.extend_from_slice(&serial_buf[..count]);
                 let measurements: Vec<Measurement> = protocol_recover_process(&mut recevice_buffer);
-
-                if let Some(measurement) = measurements.last() {
-                    measurement.show_self();
+                for measurement in &measurements {
+                    match writeln!(
+                        &mut file,
+                        "{},{}",
+                        measurement.get_vol_mv(),
+                        measurement.get_cur_ma()
+                    ) {
+                        Ok(()) => {
+                            println!("记录成功");
+                        }
+                        Err(error) => {
+                            eprintln!("写入记录失败：{}", error);
+                            return;
+                        }
+                    }
                 }
                 recoder.recoder(count, measurements.len());
+            }
+            Err(error) => {
+                if error.kind() == std::io::ErrorKind::TimedOut {
+                    continue;
+                }
+                eprintln!("串口读取失败：{}", error);
+                break;
+            }
+        }
+    }
+}
+
+pub fn serial_log_run(port_name: &str, buard: u32) {
+    let mut port = match serialport::new(port_name, buard)
+        .timeout(Duration::from_millis(100))
+        .open()
+    {
+        Ok(valid) => valid,
+        Err(error) => {
+            eprintln!("open serial port :{} error reason :{}", port_name, error);
+            return;
+        }
+    };
+    eprintln!("已打开 {}，波特率 {}，等待数据…", port_name, buard);
+    let mut serial_buf: Vec<u8> = vec![0; 32];
+    loop {
+        match port.read(serial_buf.as_mut_slice()) {
+            Ok(count) => {
+                let text = String::from_utf8_lossy(&serial_buf[..count]);
+                print!("{}", text);
             }
             Err(error) => {
                 if error.kind() == std::io::ErrorKind::TimedOut {
@@ -99,7 +166,8 @@ pub fn serial_run(port_name: &str, buard: u32) {
 pub fn serial_thread_run(port_name: &str, buard: u32) {
     let name_port: String = port_name.to_string();
     let handle = std::thread::spawn(move || {
-        serial_run(&name_port, buard);
+        // serial_run(&name_port, buard);
+        serial_log_run(&name_port, buard);
     });
     println!("主线程：串口接收线程已启动");
     handle.join().expect("串口线程发生了panic");

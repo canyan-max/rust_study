@@ -1,6 +1,6 @@
 # Rust 复盘笔记
 
-更新日期：2026-11-21
+更新日期：2026-11-23
 
 这里只保留知识速查和容易混淆的写法。当前掌握程度见 [学习进度](学习进度.md)，接下来的任务见 [学习路线与复写计划](Rust学习路线.md)。
 
@@ -445,3 +445,13 @@ fn parse_args(args: &[String]) -> Result<Config, String>
 - format!("波特率格式错误：{}", error) 生成 String；println!/eprintln! 打印。解析函数返回原因、main 统一打印可避免重复输出。
 - 参数数量检查和格式转换通过，不代表端口一定存在或波特率一定受支持；打开串口仍可能失败。
 - 当前入口：cargo run -- COM14 9600。下标 0 是程序名，两个用户参数时 args.len() 为 3。
+
+## 16. CSV 追加记录和 `?`
+
+- `OpenOptions::new().create(true).append(true).open(path)` 打开或创建文件，写入时追加。两个配置方法返回 `&mut Self`，所以可以继续接方法。
+- `file.metadata()` 返回 `io::Result<Metadata>`。先用 `match` 或 `?` 取得 `Metadata`，再用 `metadata.len()` 得到文件字节数。要显示大小，用 `println!("size={}", metadata.len())`。
+- 文件大小为 0 才写表头。表头 `voltage_mv,current_ma` 和数据行 `2500,-100` 都由逗号分成两列。
+- `writeln!(&mut file, ...)` 写一行并返回 `io::Result<()>`。操作 `File` 时在模块中引入 `use std::io::Write;`。
+- `io::Result<File>` 是 `Result<File, io::Error>` 的简写。调用后用 `Ok(file) => file` 取出 `File`；出错分支可先打印再提前返回。
+- `?` 遇到 `Ok` 取值继续，遇到 `Err` 从当前函数提前返回。成功类型可以各不相同，错误需要能转成外层函数的错误类型。打开取得 `File`，查询取得 `Metadata`，写入取得 `()`，最后用 `Ok(file)` 返回。
+- `for measurement in &measurements` 借用遍历本批所有结果，每条写一行，循环后仍可使用 `measurements.len()`。一次串口读取可能含多帧。
