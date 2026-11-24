@@ -2,12 +2,22 @@ use super::protocol_recover::Measurement;
 // use super::protocol_recover::ProtocolError;
 use super::protocol_recover::protocol_recover_pack;
 use super::protocol_recover::protocol_recover_process;
+use crossterm::{
+    cursor::MoveTo,
+    event::{self, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{self, Clear, ClearType},
+};
 use std::io::Write;
 use std::time::{Duration, Instant};
-
 struct ReceiveStats {
     bytes_count: usize,
     measurements_count: usize,
+}
+enum PortMenuAction {
+    Selected(usize),
+    Refresh,
+    Cancel,
 }
 impl ReceiveStats {
     fn new(bytes_count: usize, measurements_count: usize) -> Self {
@@ -33,7 +43,6 @@ fn open_recoder(path: &str) -> Result<std::fs::File, std::io::Error> {
     }
     Ok(files)
 }
-
 pub fn serial_run(port_name: &str, buard: u32) {
     let ports = serialport::available_ports().expect("No ports found!");
     for p in ports {
@@ -133,6 +142,148 @@ pub fn serial_run(port_name: &str, buard: u32) {
     }
 }
 
+fn serial_slect_port_memu(port_buffer: &[serialport::SerialPortInfo]) -> PortMenuAction {
+    let mut select: usize = 0;
+    println!("↑↓ 选择串口，Enter 确认，R 重新扫描，Esc 取消");
+    if port_buffer.is_empty() {
+        println!("未找到串口，插入设备后按 R 重试。");
+    }
+    for (index, port) in port_buffer.iter().enumerate() {
+        if select == index {
+            println!("->index:{},name:{}", index, port.port_name);
+        } else {
+            println!("index:{},name:{}", index, port.port_name);
+        }
+    }
+    loop {
+        if let Ok(Event::Key(key)) = event::read() {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Up if !port_buffer.is_empty() => {
+                        if select == 0 {
+                            select = 0;
+                        } else {
+                            select -= 1;
+                        }
+                        if let Err(error) =
+                            execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0))
+                        {
+                            eprintln!("清屏失败：{error}");
+                        }
+                        for (index, port) in port_buffer.iter().enumerate() {
+                            if select == index {
+                                println!("->index:{},name:{}", index, port.port_name);
+                            } else {
+                                println!("index:{},name:{}", index, port.port_name);
+                            }
+                        }
+                    }
+                    KeyCode::Down if !port_buffer.is_empty() => {
+                        if select + 1 < port_buffer.len() {
+                            select += 1;
+                        }
+
+                        if let Err(error) =
+                            execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0))
+                        {
+                            eprintln!("清屏失败：{error}");
+                        }
+                        for (index, port) in port_buffer.iter().enumerate() {
+                            if select == index {
+                                println!("->index:{},name:{}", index, port.port_name);
+                            } else {
+                                println!("index:{},name:{}", index, port.port_name);
+                            }
+                        }
+                    }
+                    KeyCode::Char('r' | 'R') => {
+                        return PortMenuAction::Refresh;
+                    }
+                    KeyCode::Enter if !port_buffer.is_empty() => {
+                        break;
+                    }
+                    KeyCode::Esc => {
+                        return PortMenuAction::Cancel;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    println!("选中串口：{}", port_buffer[select].port_name);
+    PortMenuAction::Selected(select)
+}
+
+fn serial_slect_buard_memu(buard_buffer: &[u32]) -> Option<usize> {
+    let mut select: usize = 0;
+    if buard_buffer.is_empty() {
+        return None;
+    }
+    for (index, buard) in buard_buffer.iter().enumerate() {
+        if select == index {
+            println!("->index:{},name:{}", index, buard);
+        } else {
+            println!("index:{},name:{}", index, buard);
+        }
+    }
+    loop {
+        if let Ok(Event::Key(key)) = event::read() {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Up => {
+                        if select == 0 {
+                            select = 0;
+                        } else {
+                            select -= 1;
+                        }
+                        if let Err(error) =
+                            execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0))
+                        {
+                            eprintln!("清屏失败：{error}");
+                        }
+                        for (index, buard) in buard_buffer.iter().enumerate() {
+                            if select == index {
+                                println!("->index:{},name:{}", index, buard);
+                            } else {
+                                println!("index:{},name:{}", index, buard);
+                            }
+                        }
+                    }
+                    KeyCode::Down => {
+                        if select >= buard_buffer.len() - 1 {
+                            select = buard_buffer.len() - 1;
+                        } else {
+                            select += 1;
+                        }
+
+                        if let Err(error) =
+                            execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0))
+                        {
+                            eprintln!("清屏失败：{error}");
+                        }
+                        for (index, buard) in buard_buffer.iter().enumerate() {
+                            if select == index {
+                                println!("->index:{},name:{}", index, buard);
+                            } else {
+                                println!("index:{},name:{}", index, buard);
+                            }
+                        }
+                    }
+                    KeyCode::Enter => {
+                        break;
+                    }
+                    KeyCode::Esc => {
+                        return None;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    println!("index = {}", buard_buffer[select]);
+    Some(select)
+}
+
 pub fn serial_log_run(port_name: &str, buard: u32) {
     let mut port = match serialport::new(port_name, buard)
         .timeout(Duration::from_millis(100))
@@ -145,12 +296,44 @@ pub fn serial_log_run(port_name: &str, buard: u32) {
         }
     };
     eprintln!("已打开 {}，波特率 {}，等待数据…", port_name, buard);
-    let mut serial_buf: Vec<u8> = vec![0; 32];
+    eprintln!("按 C 清屏，按 Esc 退出");
+    let mut serial_buf: Vec<u8> = vec![0; 2048];
+    let mut filtered = Vec::with_capacity(serial_buf.len());
+    // FF 可能在本次读取的末尾，下一字节要等下次读取。
+    let mut skip_next = false;
     loop {
+        if let Ok(true) = event::poll(Duration::ZERO) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char('c' | 'C') => {
+                            if let Err(error) =
+                                execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0))
+                            {
+                                eprintln!("清屏失败：{error}");
+                            }
+                        }
+                        KeyCode::Esc => break,
+                        _ => {}
+                    }
+                }
+            }
+        }
         match port.read(serial_buf.as_mut_slice()) {
             Ok(count) => {
-                let text = String::from_utf8_lossy(&serial_buf[..count]);
-                print!("{}", text);
+                filtered.clear();
+                for &byte in &serial_buf[..count] {
+                    if skip_next {
+                        skip_next = false;
+                    } else if byte == 0xFF {
+                        skip_next = true;
+                    } else {
+                        filtered.push(byte);
+                    }
+                }
+                if !filtered.is_empty() {
+                    print!("{}", String::from_utf8_lossy(&filtered));
+                }
             }
             Err(error) => {
                 if error.kind() == std::io::ErrorKind::TimedOut {
@@ -163,11 +346,58 @@ pub fn serial_log_run(port_name: &str, buard: u32) {
     }
 }
 
+pub fn serial_task_run() {
+    if let Err(error) = terminal::enable_raw_mode() {
+        eprintln!("无法开启按键模式：{error}");
+        return;
+    }
+
+    let buard_table: [u32; 2] = [9600, 115200];
+    loop {
+        let ports = match serialport::available_ports() {
+            Ok(ports) => ports,
+            Err(error) => {
+                eprintln!("扫描串口失败：{error}");
+                break;
+            }
+        };
+
+        match serial_slect_port_memu(&ports) {
+            PortMenuAction::Refresh => {
+                if let Err(error) = execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0))
+                {
+                    eprintln!("清屏失败：{error}");
+                }
+                continue;
+            }
+            PortMenuAction::Cancel => break,
+            PortMenuAction::Selected(port_index) => {
+                if let Some(buard_index) = serial_slect_buard_memu(&buard_table) {
+                    serial_log_run(&ports[port_index].port_name, buard_table[buard_index]);
+                }
+                break;
+            }
+        }
+    }
+
+    if let Err(error) = terminal::disable_raw_mode() {
+        eprintln!("恢复终端失败：{error}");
+    }
+}
+
+pub fn serial_log_thread_run() {
+    let handle = std::thread::spawn(move || {
+        // serial_run(&name_port, buard);
+        serial_task_run();
+    });
+    println!("主线程：串口接收线程已启动");
+    handle.join().expect("串口线程发生了panic");
+}
+
 pub fn serial_thread_run(port_name: &str, buard: u32) {
     let name_port: String = port_name.to_string();
     let handle = std::thread::spawn(move || {
-        // serial_run(&name_port, buard);
-        serial_log_run(&name_port, buard);
+        serial_run(&name_port, buard);
     });
     println!("主线程：串口接收线程已启动");
     handle.join().expect("串口线程发生了panic");

@@ -32,10 +32,12 @@
 mod exercises;
 #[allow(dead_code)]
 mod minigrep;
+#[allow(dead_code)]
 struct Config {
     port_name: String,
     buard: u32,
 }
+#[allow(dead_code)]
 fn parges_args(args: &[String]) -> Result<Config, String> {
     if args.len() != 3 {
         return Err("example => serial_rust.exe COM11 115200".to_string());
@@ -66,26 +68,30 @@ fn parges_args(args: &[String]) -> Result<Config, String> {
     Ok(cfgs)
 }
 
+// fn main() {
+//     // minigrep::minigrep_start();
+//     // exercises::tuple_exercises::tuple_code_start();
+//     // exercises::array_slice::array_slice_code_start();
+//     // exercises::struct_enmu_const::struct_run();
+//     // exercises::struct_enmu_const::enum_run();
+//     // exercises::struct_enmu_const::constant_run();
+//     // exercises::unpack::unpack_run();
+//     // exercises::serial_io::serial_run("COM14", 9600);
+//     // exercises::serial_io::thread_demo()
+//     let args: Vec<String> = std::env::args().collect();
+//     match parges_args(&args) {
+//         Err(error) => {
+//             println!("{}", error);
+//             return;
+//         }
+//         Ok(value) => {
+//             exercises::serial_io::serial_thread_run(&value.port_name, value.buard);
+//         }
+//     }
+// }
+
 fn main() {
-    // minigrep::minigrep_start();
-    // exercises::tuple_exercises::tuple_code_start();
-    // exercises::array_slice::array_slice_code_start();
-    // exercises::struct_enmu_const::struct_run();
-    // exercises::struct_enmu_const::enum_run();
-    // exercises::struct_enmu_const::constant_run();
-    // exercises::unpack::unpack_run();
-    // exercises::serial_io::serial_run("COM14", 9600);
-    // exercises::serial_io::thread_demo()
-    let args: Vec<String> = std::env::args().collect();
-    match parges_args(&args) {
-        Err(error) => {
-            println!("{}", error);
-            return;
-        }
-        Ok(value) => {
-            exercises::serial_io::serial_thread_run(&value.port_name, value.buard);
-        }
-    }
+    exercises::serial_io::serial_log_thread_run();
 }
 #[cfg(test)]
 mod tests {
