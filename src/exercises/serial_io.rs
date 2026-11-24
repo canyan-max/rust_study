@@ -2,6 +2,7 @@ use super::protocol_recover::Measurement;
 // use super::protocol_recover::ProtocolError;
 use super::protocol_recover::protocol_recover_pack;
 use super::protocol_recover::protocol_recover_process;
+use crossterm::style::Stylize;
 use crossterm::{
     cursor::MoveTo,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -43,6 +44,7 @@ fn open_recoder(path: &str) -> Result<std::fs::File, std::io::Error> {
     }
     Ok(files)
 }
+
 pub fn serial_run(port_name: &str, buard: u32) {
     let ports = serialport::available_ports().expect("No ports found!");
     for p in ports {
@@ -144,15 +146,18 @@ pub fn serial_run(port_name: &str, buard: u32) {
 
 fn serial_slect_port_memu(port_buffer: &[serialport::SerialPortInfo]) -> PortMenuAction {
     let mut select: usize = 0;
-    println!("↑↓ 选择串口，Enter 确认，R 重新扫描，Esc 取消");
+
     if port_buffer.is_empty() {
         println!("未找到串口，插入设备后按 R 重试。");
     }
     for (index, port) in port_buffer.iter().enumerate() {
         if select == index {
-            println!("->index:{},name:{}", index, port.port_name);
+            println!(
+                "{}",
+                format!("====>>>port_name:{} port_index:{}", port.port_name, index).green()
+            );
         } else {
-            println!("index:{},name:{}", index, port.port_name);
+            println!("port_name:{} port_index:{}", port.port_name, index);
         }
     }
     loop {
@@ -172,9 +177,16 @@ fn serial_slect_port_memu(port_buffer: &[serialport::SerialPortInfo]) -> PortMen
                         }
                         for (index, port) in port_buffer.iter().enumerate() {
                             if select == index {
-                                println!("->index:{},name:{}", index, port.port_name);
+                                println!(
+                                    "{}",
+                                    format!(
+                                        "====>>>port_name:{} port_index:{}",
+                                        port.port_name, index
+                                    )
+                                    .green()
+                                );
                             } else {
-                                println!("index:{},name:{}", index, port.port_name);
+                                println!("port_name:{} port_index:{}", port.port_name, index);
                             }
                         }
                     }
@@ -190,9 +202,16 @@ fn serial_slect_port_memu(port_buffer: &[serialport::SerialPortInfo]) -> PortMen
                         }
                         for (index, port) in port_buffer.iter().enumerate() {
                             if select == index {
-                                println!("->index:{},name:{}", index, port.port_name);
+                                println!(
+                                    "{}",
+                                    format!(
+                                        "====>>>port_name:{} port_index:{}",
+                                        port.port_name, index
+                                    )
+                                    .green()
+                                );
                             } else {
-                                println!("index:{},name:{}", index, port.port_name);
+                                println!("port_name:{} port_index:{}", port.port_name, index);
                             }
                         }
                     }
@@ -221,9 +240,12 @@ fn serial_slect_buard_memu(buard_buffer: &[u32]) -> Option<usize> {
     }
     for (index, buard) in buard_buffer.iter().enumerate() {
         if select == index {
-            println!("->index:{},name:{}", index, buard);
+            println!(
+                "{}",
+                format!("====>>>baud_rate:{} baud_index:{}", buard, index).green()
+            );
         } else {
-            println!("index:{},name:{}", index, buard);
+            println!("baud_rate:{} baud_index:{}", buard, index);
         }
     }
     loop {
@@ -243,9 +265,13 @@ fn serial_slect_buard_memu(buard_buffer: &[u32]) -> Option<usize> {
                         }
                         for (index, buard) in buard_buffer.iter().enumerate() {
                             if select == index {
-                                println!("->index:{},name:{}", index, buard);
+                                println!(
+                                    "{}",
+                                    format!("====>>>baud_rate:{} baud_index:{}", buard, index)
+                                        .green()
+                                );
                             } else {
-                                println!("index:{},name:{}", index, buard);
+                                println!("baud_rate:{} baud_index:{}", buard, index);
                             }
                         }
                     }
@@ -263,9 +289,13 @@ fn serial_slect_buard_memu(buard_buffer: &[u32]) -> Option<usize> {
                         }
                         for (index, buard) in buard_buffer.iter().enumerate() {
                             if select == index {
-                                println!("->index:{},name:{}", index, buard);
+                                println!(
+                                    "{}",
+                                    format!("====>>>baud_rate:{} baud_index:{}", buard, index)
+                                        .green()
+                                );
                             } else {
-                                println!("index:{},name:{}", index, buard);
+                                println!("baud_rate:{} baud_index:{}", buard, index);
                             }
                         }
                     }
@@ -296,7 +326,6 @@ pub fn serial_log_run(port_name: &str, buard: u32) {
         }
     };
     eprintln!("已打开 {}，波特率 {}，等待数据…", port_name, buard);
-    eprintln!("按 C 清屏，按 Esc 退出");
     let mut serial_buf: Vec<u8> = vec![0; 2048];
     let mut filtered = Vec::with_capacity(serial_buf.len());
     // FF 可能在本次读取的末尾，下一字节要等下次读取。
@@ -351,7 +380,10 @@ pub fn serial_task_run() {
         eprintln!("无法开启按键模式：{error}");
         return;
     }
-
+    if let Err(error) = execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0)) {
+        eprintln!("清屏失败：{error}");
+    }
+    serial_head();
     let buard_table: [u32; 2] = [9600, 115200];
     loop {
         let ports = match serialport::available_ports() {
@@ -390,16 +422,27 @@ pub fn serial_log_thread_run() {
         // serial_run(&name_port, buard);
         serial_task_run();
     });
-    println!("主线程：串口接收线程已启动");
     handle.join().expect("串口线程发生了panic");
 }
 
+fn serial_head() {
+    println!(
+        r#"
+        ██╗      ██████╗  ██████╗     ███████╗███████╗██╗     ███████╗
+        ██║     ██╔═══██╗██╔════╝     ██╔════╝██╔════╝██║     ██╔════╝
+        ██║     ██║   ██║██║  ███╗    ███████╗█████╗  ██║     █████╗
+        ██║     ██║   ██║██║   ██║    ╚════██║██╔══╝  ██║     ██╔══╝
+        ███████╗╚██████╔╝╚██████╔╝    ███████║███████╗███████╗██║
+        ╚══════╝ ╚═════╝  ╚═════╝     ╚══════╝╚══════╝╚══════╝╚═╝
+    "#
+    );
+    println!("  ↑↓ Select Port | Enter Confirm | R Rescan | Esc Cancel");
+}
 pub fn serial_thread_run(port_name: &str, buard: u32) {
     let name_port: String = port_name.to_string();
     let handle = std::thread::spawn(move || {
         serial_run(&name_port, buard);
     });
-    println!("主线程：串口接收线程已启动");
     handle.join().expect("串口线程发生了panic");
 }
 
