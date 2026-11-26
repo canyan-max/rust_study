@@ -91,7 +91,7 @@ fn parges_args(args: &[String]) -> Result<Config, String> {
 // }
 
 fn main() {
-    exercises::serial_io::serial_log_thread_run();
+    exercises::terminal_serial::serial_log_thread_run();
 }
 #[cfg(test)]
 mod tests {

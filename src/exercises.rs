@@ -2,6 +2,7 @@
 pub mod array_slice;
 pub mod protocol_recover;
 pub mod serial_io;
+pub mod terminal_serial;
 pub mod struct_enmu_const;
 pub mod tuple_exercises;
 pub mod unpack;
